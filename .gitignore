@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+venv/
+
+# Production build outputs
+dist/
+**/dist/
+.vite/
+**/.vite/
+
+# Python
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+**/.pytest_cache/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+*.log
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3
