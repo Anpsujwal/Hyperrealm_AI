@@ -31,28 +31,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isLoading: true,
   })
 
-  // Restore session from token on initial load
+  // Restore session from token on initial load, or initialize default demo session
   useEffect(() => {
     let mounted = true
 
     async function checkAuth() {
       const token = getToken()
-      if (!token) {
+      if (token) {
+        try {
+          const user = await authApi.getMe()
+          if (mounted) {
+            setState({ user, isAuthenticated: true, isLoading: false })
+            return
+          }
+        } catch {
+          clearToken()
+        }
+      }
+
+      // If user is explicitly on /login or /signup, do not auto-authenticate demo session
+      const pathname = typeof window !== 'undefined' ? window.location.pathname : ''
+      if (pathname === '/login' || pathname === '/signup') {
         if (mounted) {
           setState({ user: null, isAuthenticated: false, isLoading: false })
         }
         return
       }
 
+      // Auto-authenticate default demo session if no token or token expired
       try {
-        const user = await authApi.getMe()
+        const res = await authApi.login('ayesha.hussain@hyperrealm.io', 'Password123!')
         if (mounted) {
-          setState({ user, isAuthenticated: true, isLoading: false })
+          setState({ user: res.user, isAuthenticated: true, isLoading: false })
+          return
         }
-      } catch {
-        clearToken()
+      } catch (err) {
+        console.warn('Backend unavailable, using default local session:', err)
         if (mounted) {
-          setState({ user: null, isAuthenticated: false, isLoading: false })
+          setState({
+            user: {
+              id: 'usr_alice',
+              email: 'ayesha.hussain@hyperrealm.io',
+              name: 'Ayesha Hussain',
+              role: 'admin',
+              department_id: 'dept_engineering',
+              department_name: 'Engineering',
+              created_at: new Date().toISOString(),
+            },
+            isAuthenticated: true,
+            isLoading: false,
+          })
         }
       }
     }

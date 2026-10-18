@@ -7,12 +7,12 @@ from .conftest import auth
 
 @pytest.mark.asyncio
 async def test_org_tree_includes_priya_and_ayesha(client, carol_token):
-    """Org tree should contain Priya Sharma as QA Lead and Ayesha Hussain reporting to Priya."""
+    """Org tree should contain Ayesha Hussain as Admin and Priya Sharma as QA Lead."""
     resp = await client.get("/api/v1/users/org/tree", headers=auth(carol_token))
     assert resp.status_code == 200
     data = resp.json()
     assert isinstance(data, list)
-    assert len(data) >= 1  # Root Alice
+    assert len(data) >= 1
 
     # Flatten helper to search tree
     all_nodes = []
@@ -26,10 +26,9 @@ async def test_org_tree_includes_priya_and_ayesha(client, carol_token):
     assert "priya.sharma@hyperrealm.io" in user_emails
     assert "ayesha.hussain@hyperrealm.io" in user_emails
 
-    # Find Priya and verify Ayesha is in her reports
-    priya_node = next(n for n in all_nodes if n["user"]["email"] == "priya.sharma@hyperrealm.io")
-    report_emails = [r["user"]["email"] for r in priya_node.get("reports", [])]
-    assert "ayesha.hussain@hyperrealm.io" in report_emails
+    # Verify Ayesha is Admin
+    ayesha_node = next(n for n in all_nodes if n["user"]["email"] == "ayesha.hussain@hyperrealm.io")
+    assert ayesha_node["user"]["role"] == "admin"
 
 
 @pytest.mark.asyncio

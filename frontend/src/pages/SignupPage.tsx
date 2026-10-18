@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Eye, EyeOff, Mail, Lock, User, Building2, Zap, CheckCircle2, Sun, Moon } from 'lucide-react'
+import { Eye, EyeOff, Mail, Lock, User, Building2, CheckCircle2, Sun, Moon } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useAuth } from '@/contexts/AuthContext'
@@ -17,7 +17,7 @@ const perks = [
 const CURRENT_YEAR = new Date().getFullYear()
 
 export function SignupPage() {
-  const { signup, isLoading } = useAuth()
+  const { signup } = useAuth()
   const { resolvedTheme, toggleTheme } = useTheme()
   const navigate = useNavigate()
   const [form, setForm] = useState({
@@ -29,6 +29,7 @@ export function SignupPage() {
   })
   const [showPassword, setShowPassword] = useState(false)
   const [errors, setErrors] = useState<Partial<typeof form & { api?: string }>>({})
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const update = (field: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm((f) => ({ ...f, [field]: e.target.value }))
@@ -50,6 +51,7 @@ export function SignupPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     if (!validate()) return
+    setIsSubmitting(true)
     try {
       await signup(form.name, form.email, form.password)
       navigate('/app/dashboard')
@@ -58,18 +60,20 @@ export function SignupPage() {
         ...prev,
         api: err?.message || 'Failed to create account. Please try again.',
       }))
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
   return (
     <div className="min-h-screen bg-[var(--bg-base)] flex">
       {/* Left panel */}
-      <div className="hidden lg:flex flex-col justify-between w-1/2 p-12 relative overflow-hidden bg-gradient-to-br from-indigo-950/60 to-[var(--bg-base)] border-r border-[var(--border-default)]">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,rgba(139,92,246,0.15)_0%,transparent_60%)] pointer-events-none" />
+      <div className="hidden lg:flex flex-col justify-between w-1/2 p-12 relative overflow-hidden bg-gradient-to-br from-indigo-50/90 via-violet-50/60 to-[var(--bg-base)] dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 border-r border-[var(--border-default)] dark:border-zinc-800">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,rgba(139,92,246,0.1)_0%,transparent_60%)] dark:hidden pointer-events-none" />
 
         <Link to="/" className="relative flex items-center gap-2.5 w-fit">
-          <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-[var(--shadow-glow-indigo)]">
-            <Zap className="h-5 w-5 text-white" />
+          <div className="h-9 w-9 rounded-xl overflow-hidden border border-cyan-500/40 shadow-[0_0_16px_rgba(6,182,212,0.35)] flex items-center justify-center bg-zinc-950 flex-shrink-0">
+            <img src="/hyperrealm-logo.jpg" alt="HYPERREALM" className="h-full w-full object-cover scale-110" />
           </div>
           <span className="text-lg font-bold tracking-wide">HYPERREALM</span>
         </Link>
@@ -116,9 +120,9 @@ export function SignupPage() {
         </button>
 
         <div className="w-full max-w-sm py-8">
-          <Link to="/" className="lg:hidden flex items-center gap-2 mb-8">
-            <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
-              <Zap className="h-3.5 w-3.5 text-white" />
+          <Link to="/" className="lg:hidden flex items-center gap-2.5 mb-8">
+            <div className="h-8 w-8 rounded-lg overflow-hidden border border-cyan-500/30 shadow-xs flex items-center justify-center bg-zinc-950 flex-shrink-0">
+              <img src="/hyperrealm-logo.jpg" alt="HYPERREALM" className="h-full w-full object-cover scale-110" />
             </div>
             <span className="text-sm font-bold tracking-wide">HYPERREALM</span>
           </Link>
@@ -209,10 +213,10 @@ export function SignupPage() {
               type="submit"
               size="lg"
               className="w-full"
-              loading={isLoading}
+              loading={isSubmitting}
               id="signup-submit"
             >
-              Create Account
+              {isSubmitting ? 'Creating Account...' : 'Sign Up'}
             </Button>
           </form>
 

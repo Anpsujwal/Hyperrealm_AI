@@ -10,17 +10,21 @@ from abc import ABC, abstractmethod
 from typing import Optional
 
 from ..models import (
+    ActionExecutionRecord,
     Approval,
     AuditRecord,
+    BrandComplianceReport,
     Conversation,
     Department,
     Document,
     Guideline,
+    GuidelineVersionRecord,
     Incident,
     LearningResource,
     Meeting,
     Message,
     Notification,
+    OnboardingJourney,
     Project,
     Task,
     UserLearningProgress,
@@ -90,7 +94,14 @@ class DocumentRepository(ABC):
     @abstractmethod
     async def get(self, doc_id: str) -> Optional[Document]: ...
     @abstractmethod
-    async def list(self, skip: int = 0, limit: int = 20, category: Optional[str] = None) -> tuple[list[Document], int]: ...
+    async def list(
+        self,
+        skip: int = 0,
+        limit: int = 20,
+        category: Optional[str] = None,
+        author_id: Optional[str] = None,
+        scope: Optional[str] = None,
+    ) -> tuple[list[Document], int]: ...
     @abstractmethod
     async def create(self, doc: Document) -> Document: ...
     @abstractmethod
@@ -103,11 +114,19 @@ class GuidelineRepository(ABC):
     @abstractmethod
     async def get(self, guide_id: str) -> Optional[Guideline]: ...
     @abstractmethod
-    async def list(self, skip: int = 0, limit: int = 20, category: Optional[str] = None) -> tuple[list[Guideline], int]: ...
+    async def list(
+        self,
+        skip: int = 0,
+        limit: int = 20,
+        category: Optional[str] = None,
+        status: Optional[str] = None,
+    ) -> tuple[list[Guideline], int]: ...
     @abstractmethod
     async def create(self, guide: Guideline) -> Guideline: ...
     @abstractmethod
     async def update(self, guide: Guideline) -> Guideline: ...
+    @abstractmethod
+    async def delete(self, guide_id: str) -> bool: ...
 
 
 class LearningRepository(ABC):
@@ -189,3 +208,48 @@ class AuditRepository(ABC):
     async def list(self, skip: int = 0, limit: int = 50, actor_id: Optional[str] = None) -> tuple[list[AuditRecord], int]: ...
     @abstractmethod
     async def create(self, record: AuditRecord) -> AuditRecord: ...
+
+
+class GuidelineVersionRepository(ABC):
+    @abstractmethod
+    async def list_by_guideline(self, guideline_id: str) -> list[GuidelineVersionRecord]: ...
+    @abstractmethod
+    async def get(self, version_id: str) -> Optional[GuidelineVersionRecord]: ...
+    @abstractmethod
+    async def create(self, record: GuidelineVersionRecord) -> GuidelineVersionRecord: ...
+
+
+class BrandComplianceRepository(ABC):
+    @abstractmethod
+    async def list(self, skip: int = 0, limit: int = 20, user_id: Optional[str] = None) -> tuple[list[BrandComplianceReport], int]: ...
+    @abstractmethod
+    async def get(self, report_id: str) -> Optional[BrandComplianceReport]: ...
+    @abstractmethod
+    async def create(self, report: BrandComplianceReport) -> BrandComplianceReport: ...
+
+
+class ActionExecutionRepository(ABC):
+    @abstractmethod
+    async def list(self, skip: int = 0, limit: int = 20, user_id: Optional[str] = None) -> tuple[list[ActionExecutionRecord], int]: ...
+    @abstractmethod
+    async def get(self, action_id: str) -> Optional[ActionExecutionRecord]: ...
+    @abstractmethod
+    async def get_by_idempotency_key(self, key: str) -> Optional[ActionExecutionRecord]: ...
+    @abstractmethod
+    async def create(self, record: ActionExecutionRecord) -> ActionExecutionRecord: ...
+    @abstractmethod
+    async def update(self, record: ActionExecutionRecord) -> ActionExecutionRecord: ...
+
+
+class OnboardingRepository(ABC):
+    @abstractmethod
+    async def get_by_user(self, user_id: str) -> Optional[OnboardingJourney]: ...
+    @abstractmethod
+    async def get(self, journey_id: str) -> Optional[OnboardingJourney]: ...
+    @abstractmethod
+    async def create(self, journey: OnboardingJourney) -> OnboardingJourney: ...
+    @abstractmethod
+    async def update(self, journey: OnboardingJourney) -> OnboardingJourney: ...
+    @abstractmethod
+    async def list_by_manager(self, manager_id: str) -> list[OnboardingJourney]: ...
+

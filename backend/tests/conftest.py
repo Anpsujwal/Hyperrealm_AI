@@ -59,7 +59,7 @@ async def _login(client: AsyncClient, email: str) -> str:
 
 @pytest_asyncio.fixture(scope="session")
 async def alice_token(client):
-    return await _login(client, "alice.chen@hyperrealm.io")
+    return await _login(client, "ayesha.hussain@hyperrealm.io")
 
 
 @pytest_asyncio.fixture(scope="session")

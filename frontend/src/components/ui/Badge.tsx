@@ -14,7 +14,7 @@ const badgeVariants = cva(
         emerald: 'bg-emerald-500/10 dark:bg-emerald-500/15 border-emerald-500/25 text-emerald-800 dark:text-emerald-300',
         amber: 'bg-amber-500/10 dark:bg-amber-500/15 border-amber-500/25 text-amber-800 dark:text-amber-300',
         rose: 'bg-rose-500/10 dark:bg-rose-500/15 border-rose-500/25 text-rose-700 dark:text-rose-300',
-        gemini: 'bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-rose-500/10 border-purple-500/30 text-purple-700 dark:text-purple-300 shadow-sm',
+        gemini: 'bg-gradient-to-r from-blue-50/90 via-purple-50/80 to-rose-50/70 dark:bg-none dark:bg-zinc-800 border border-purple-200/90 dark:border-zinc-700 text-purple-700 dark:text-zinc-200 shadow-xs dark:shadow-none',
       },
       size: {
         sm: 'text-xs px-2 py-0.5',

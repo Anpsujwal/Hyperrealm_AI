@@ -239,12 +239,27 @@ async def org_tree(
     user_repo: UserRepoDep,
 ) -> list[OrgNode]:
     users, _ = await user_repo.list(limit=200)
-    user_map = {u.id: u for u in users}
 
-    def build_node(user: UserProfile) -> OrgNode:
-        children = [build_node(u) for u in users if u.manager_id == user.id]
+    # Primary leadership root: Admin (Ayesha Hussain)
+    admin_root = next((u for u in users if u.role == UserRole.ADMIN), None)
+    if admin_root:
+        def build_node(user: UserProfile) -> OrgNode:
+            if user.id == admin_root.id:
+                # Direct reports plus any unassigned employees who have no manager
+                children = [
+                    build_node(u) for u in users
+                    if u.manager_id == user.id or (u.manager_id is None and u.id != admin_root.id)
+                ]
+            else:
+                children = [build_node(u) for u in users if u.manager_id == user.id]
+            return OrgNode(user=UserPublic.model_validate(user.model_dump()), reports=children)
+
+        return [build_node(admin_root)]
+
+    # Fallback if no admin configured
+    roots = [u for u in users if u.manager_id is None] or ([users[0]] if users else [])
+    def build_node_fallback(user: UserProfile) -> OrgNode:
+        children = [build_node_fallback(u) for u in users if u.manager_id == user.id]
         return OrgNode(user=UserPublic.model_validate(user.model_dump()), reports=children)
+    return [build_node_fallback(r) for r in roots]
 
-    # Root nodes: users with no manager
-    roots = [u for u in users if u.manager_id is None]
-    return [build_node(r) for r in roots]

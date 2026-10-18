@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *, .dark, .dark *));
+
 @layer base {
   :root,
   :root[data-theme="light"],
@@ -69,6 +71,18 @@
     --glass-elevated-bg: rgba(255, 255, 255, 0.94);
     --gemini-aurora-bg: radial-gradient(circle at 50% 0%, rgba(66, 133, 244, 0.08) 0%, rgba(155, 114, 207, 0.05) 35%, rgba(217, 101, 112, 0.03) 60%, transparent 80%);
 
+    /* Pleasant Light Theme Gradients */
+    --gradient-hero: linear-gradient(135deg, rgba(238, 242, 255, 0.95) 0%, rgba(245, 243, 255, 0.85) 45%, rgba(240, 253, 250, 0.9) 100%);
+    --gradient-auth-panel: linear-gradient(145deg, #eef2ff 0%, #f5f3ff 45%, #f8faff 100%);
+    --gradient-card-violet: linear-gradient(135deg, rgba(245, 243, 255, 0.92) 0%, rgba(255, 255, 255, 0.98) 50%, rgba(238, 242, 255, 0.8) 100%);
+    --gradient-card-emerald: linear-gradient(135deg, rgba(236, 253, 245, 0.92) 0%, rgba(255, 255, 255, 0.98) 50%, rgba(240, 253, 250, 0.8) 100%);
+    --gradient-card-cyan: linear-gradient(135deg, rgba(236, 254, 255, 0.92) 0%, rgba(255, 255, 255, 0.98) 50%, rgba(239, 246, 255, 0.8) 100%);
+    --gradient-card-indigo: linear-gradient(135deg, rgba(238, 242, 255, 0.92) 0%, rgba(255, 255, 255, 0.98) 50%, rgba(245, 243, 255, 0.8) 100%);
+    --gradient-card-amber: linear-gradient(135deg, rgba(254, 243, 199, 0.85) 0%, rgba(255, 255, 255, 0.98) 50%, rgba(255, 247, 237, 0.8) 100%);
+    --gradient-banner-scrum: linear-gradient(135deg, rgba(245, 243, 255, 0.95) 0%, rgba(255, 255, 255, 0.95) 50%, rgba(238, 242, 255, 0.9) 100%);
+    --gradient-banner-learning: linear-gradient(135deg, rgba(236, 253, 245, 0.95) 0%, rgba(255, 255, 255, 0.95) 50%, rgba(240, 253, 250, 0.9) 100%);
+    --gradient-banner-meetings: linear-gradient(135deg, rgba(236, 254, 255, 0.95) 0%, rgba(255, 255, 255, 0.95) 50%, rgba(238, 242, 255, 0.9) 100%);
+
     /* Fonts */
     --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     --font-display: 'Outfit', 'Inter', system-ui, -apple-system, sans-serif;
@@ -77,53 +91,65 @@
 
   :root[data-theme="dark"],
   html.dark {
-    /* Dark Mode Palette — Google Gemini deep obsidian & slate */
-    --bg-base: #0a0d14;
-    --bg-surface: #101522;
-    --bg-elevated: #171f30;
-    --bg-overlay: #1e293f;
-    --bg-subtle: #26344f;
+    /* Pure, clean, elegant dark palette — deep obsidian black (no grey) */
+    --bg-base: #09090b;
+    --bg-surface: #121215;
+    --bg-elevated: #18181b;
+    --bg-overlay: #18181b;
+    --bg-subtle: #27272a;
 
-    /* Borders */
-    --border-default: rgba(255, 255, 255, 0.08);
-    --border-subtle: rgba(255, 255, 255, 0.04);
-    --border-strong: rgba(255, 255, 255, 0.16);
+    /* Borders — crisp, thin, non-grey hairline borders */
+    --border-default: #27272a;
+    --border-subtle: #1c1c20;
+    --border-strong: #3f3f46;
 
-    /* Text */
-    --text-primary: #f8fafc;
-    --text-secondary: #94a3b8;
-    --text-muted: #64748b;
-    --text-inverse: #0a0d14;
+    /* Text — pure crisp white and muted zinc */
+    --text-primary: #ffffff;
+    --text-secondary: #a1a1aa;
+    --text-muted: #71717a;
+    --text-inverse: #09090b;
 
-    /* Accents */
+    /* Accents — simple classic indigo, no neon */
     --accent-indigo: #6366f1;
-    --accent-indigo-hover: #818cf8;
-    --accent-violet: #a78bfa;
-    --accent-cyan: #22d3ee;
-    --accent-emerald: #34d399;
-    --accent-amber: #fbbf24;
-    --accent-rose: #fb7185;
+    --accent-indigo-hover: #4f46e5;
+    --accent-violet: #8b5cf6;
+    --accent-cyan: #06b6d4;
+    --accent-emerald: #10b981;
+    --accent-amber: #f59e0b;
+    --accent-rose: #f43f5e;
 
-    /* Gemini Signature Accents */
-    --gemini-blue: #4285f4;
-    --gemini-purple: #9b72cf;
-    --gemini-rose: #d96570;
-    --gemini-teal: #1ea446;
-    --gemini-cyan: #22d3ee;
+    /* Signature Accents */
+    --gemini-blue: #3b82f6;
+    --gemini-purple: #8b5cf6;
+    --gemini-rose: #ec4899;
+    --gemini-teal: #10b981;
+    --gemini-cyan: #06b6d4;
 
-    /* Shadows */
-    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5);
-    --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.55);
-    --shadow-lg: 0 12px 36px rgba(0, 0, 0, 0.7);
-    --shadow-glow-indigo: 0 0 32px rgba(99, 102, 241, 0.28);
-    --shadow-glow-cyan: 0 0 32px rgba(34, 211, 238, 0.22);
-    --shadow-gemini-glow: 0 0 40px -8px rgba(155, 114, 207, 0.35);
+    /* Shadows — deep shadow, no colored neon glow */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.6);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.7);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.85);
+    --shadow-glow-indigo: none;
+    --shadow-glow-cyan: none;
+    --shadow-gemini-glow: none;
 
     /* Glass */
-    --glass-bg: rgba(16, 21, 34, 0.75);
-    --glass-border: rgba(255, 255, 255, 0.09);
-    --glass-elevated-bg: rgba(23, 31, 48, 0.85);
-    --gemini-aurora-bg: radial-gradient(circle at 50% 0%, rgba(66, 133, 244, 0.15) 0%, rgba(155, 114, 207, 0.1) 40%, rgba(217, 101, 112, 0.05) 65%, transparent 85%);
+    --glass-bg: rgba(18, 18, 21, 0.92);
+    --glass-border: #27272a;
+    --glass-elevated-bg: rgba(24, 24, 27, 0.95);
+    --gemini-aurora-bg: none;
+
+    /* Clean Dark Theme Gradients (Simple flat dark, no neon clashes, no grey) */
+    --gradient-hero: linear-gradient(180deg, #121215 0%, #09090b 100%);
+    --gradient-auth-panel: linear-gradient(180deg, #121215 0%, #09090b 100%);
+    --gradient-card-violet: linear-gradient(180deg, #18181b 0%, #121215 100%);
+    --gradient-card-emerald: linear-gradient(180deg, #18181b 0%, #121215 100%);
+    --gradient-card-cyan: linear-gradient(180deg, #18181b 0%, #121215 100%);
+    --gradient-card-indigo: linear-gradient(180deg, #18181b 0%, #121215 100%);
+    --gradient-card-amber: linear-gradient(180deg, #18181b 0%, #121215 100%);
+    --gradient-banner-scrum: linear-gradient(180deg, #18181b 0%, #121215 100%);
+    --gradient-banner-learning: linear-gradient(180deg, #18181b 0%, #121215 100%);
+    --gradient-banner-meetings: linear-gradient(180deg, #18181b 0%, #121215 100%);
   }
 
   * {
@@ -203,19 +229,49 @@
     border: 1px solid var(--border-strong);
   }
 
-  /* Gemini signature multi-color gradient text */
+  /* Gemini signature multi-color gradient text — theme tuned with headroom padding to prevent clipping */
   .text-gemini {
-    background: linear-gradient(135deg, #4285f4 0%, #9b72cf 45%, #d96570 85%);
+    background: linear-gradient(135deg, #2563eb 0%, #7c3aed 45%, #db2777 85%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+    display: inline-block;
+    padding-top: 0.1em;
+    padding-bottom: 0.15em;
+    line-height: normal;
+  }
+
+  :is(.dark, [data-theme="dark"]) .text-gemini {
+    background: none !important;
+    -webkit-background-clip: unset !important;
+    -webkit-text-fill-color: #ffffff !important;
+    color: #ffffff !important;
+    display: inline-block;
+    padding-top: 0.1em;
+    padding-bottom: 0.15em;
+    line-height: normal;
   }
 
   .text-gradient-indigo {
-    background: linear-gradient(135deg, #4285f4 0%, #8b5cf6 50%, #06b6d4 100%);
+    background: linear-gradient(135deg, #3730a3 0%, #6d28d9 50%, #0284c7 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+    display: inline-block;
+    padding-top: 0.1em;
+    padding-bottom: 0.15em;
+    line-height: normal;
+  }
+
+  :is(.dark, [data-theme="dark"]) .text-gradient-indigo {
+    background: none !important;
+    -webkit-background-clip: unset !important;
+    -webkit-text-fill-color: #ffffff !important;
+    color: #ffffff !important;
+    display: inline-block;
+    padding-top: 0.1em;
+    padding-bottom: 0.15em;
+    line-height: normal;
   }
 
   .text-gradient-cool {
@@ -249,6 +305,47 @@
     background-size: 100% 100%;
   }
 
+  /* Theme-adaptive pleasant gradient utilities */
+  .bg-theme-hero {
+    background: var(--gradient-hero);
+  }
+
+  .bg-theme-auth {
+    background: var(--gradient-auth-panel);
+  }
+
+  .bg-theme-card-violet {
+    background: var(--gradient-card-violet);
+  }
+
+  .bg-theme-card-emerald {
+    background: var(--gradient-card-emerald);
+  }
+
+  .bg-theme-card-cyan {
+    background: var(--gradient-card-cyan);
+  }
+
+  .bg-theme-card-indigo {
+    background: var(--gradient-card-indigo);
+  }
+
+  .bg-theme-card-amber {
+    background: var(--gradient-card-amber);
+  }
+
+  .bg-theme-banner-scrum {
+    background: var(--gradient-banner-scrum);
+  }
+
+  .bg-theme-banner-learning {
+    background: var(--gradient-banner-learning);
+  }
+
+  .bg-theme-banner-meetings {
+    background: var(--gradient-banner-meetings);
+  }
+
   /* Subtle pulsing iridescent border for cards and inputs */
   .gemini-border-glow {
     position: relative;
@@ -268,6 +365,10 @@
     -webkit-mask-composite: xor;
     mask-composite: exclude;
     pointer-events: none;
+  }
+
+  :is(.dark, [data-theme="dark"]) .gemini-border-glow::before {
+    display: none !important;
   }
 
   .scrollbar-hide {

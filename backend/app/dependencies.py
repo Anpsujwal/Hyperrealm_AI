@@ -14,29 +14,37 @@ from fastapi import Depends
 
 from .config import Settings, get_settings
 from .repositories import (
+    ActionExecutionRepository,
     ApprovalRepository,
     AuditRepository,
+    BrandComplianceRepository,
     ConversationRepository,
     DepartmentRepository,
     DocumentRepository,
     GuidelineRepository,
+    GuidelineVersionRepository,
     IncidentRepository,
     LearningRepository,
     MeetingRepository,
+    MemoryActionExecutionRepository,
     MemoryApprovalRepository,
     MemoryAuditRepository,
+    MemoryBrandComplianceRepository,
     MemoryConversationRepository,
     MemoryDepartmentRepository,
     MemoryDocumentRepository,
     MemoryGuidelineRepository,
+    MemoryGuidelineVersionRepository,
     MemoryIncidentRepository,
     MemoryLearningRepository,
     MemoryMeetingRepository,
     MemoryNotificationRepository,
+    MemoryOnboardingRepository,
     MemoryProjectRepository,
     MemoryTaskRepository,
     MemoryUserRepository,
     NotificationRepository,
+    OnboardingRepository,
     ProjectRepository,
     TaskRepository,
     UserRepository,
@@ -58,15 +66,23 @@ _approval_repo: ApprovalRepository | None = None
 _incident_repo: IncidentRepository | None = None
 _notif_repo: NotificationRepository | None = None
 _audit_repo: AuditRepository | None = None
+_gver_repo: GuidelineVersionRepository | None = None
+_bcr_repo: BrandComplianceRepository | None = None
+_act_repo: ActionExecutionRepository | None = None
+_onb_repo: OnboardingRepository | None = None
 
 
-def init_repositories(backend: str | None = None) -> None:
+def init_repositories(backend: str | None = None, force: bool = False) -> None:
     """
     Called once at startup. Initialises SQLite or in-memory stores.
     """
     global _user_repo, _dept_repo, _project_repo, _conv_repo, _doc_repo
     global _guide_repo, _learning_repo, _meeting_repo, _task_repo
     global _approval_repo, _incident_repo, _notif_repo, _audit_repo
+    global _gver_repo, _bcr_repo, _act_repo, _onb_repo
+
+    if not force and _user_repo is not None and backend is None:
+        return
 
     import os
     settings = get_settings()
@@ -75,16 +91,20 @@ def init_repositories(backend: str | None = None) -> None:
     if active_backend == "sqlite":
         from .repositories.sqlite import (
             init_sqlite_db,
+            SqliteActionExecutionRepository,
             SqliteApprovalRepository,
             SqliteAuditRepository,
+            SqliteBrandComplianceRepository,
             SqliteConversationRepository,
             SqliteDepartmentRepository,
             SqliteDocumentRepository,
             SqliteGuidelineRepository,
+            SqliteGuidelineVersionRepository,
             SqliteIncidentRepository,
             SqliteLearningRepository,
             SqliteMeetingRepository,
             SqliteNotificationRepository,
+            SqliteOnboardingRepository,
             SqliteProjectRepository,
             SqliteTaskRepository,
             SqliteUserRepository,
@@ -103,6 +123,10 @@ def init_repositories(backend: str | None = None) -> None:
         _incident_repo = SqliteIncidentRepository(settings.SQLITE_DB_PATH)
         _notif_repo = SqliteNotificationRepository(settings.SQLITE_DB_PATH)
         _audit_repo = SqliteAuditRepository(settings.SQLITE_DB_PATH)
+        _gver_repo = SqliteGuidelineVersionRepository(settings.SQLITE_DB_PATH)
+        _bcr_repo = SqliteBrandComplianceRepository(settings.SQLITE_DB_PATH)
+        _act_repo = SqliteActionExecutionRepository(settings.SQLITE_DB_PATH)
+        _onb_repo = SqliteOnboardingRepository(settings.SQLITE_DB_PATH)
     else:
         if active_backend == "firestore":
             import warnings
@@ -124,6 +148,10 @@ def init_repositories(backend: str | None = None) -> None:
         _incident_repo = MemoryIncidentRepository()
         _notif_repo = MemoryNotificationRepository()
         _audit_repo = MemoryAuditRepository()
+        _gver_repo = MemoryGuidelineVersionRepository()
+        _bcr_repo = MemoryBrandComplianceRepository()
+        _act_repo = MemoryActionExecutionRepository()
+        _onb_repo = MemoryOnboardingRepository()
 
 
 # ─── FastAPI dependency functions ─────────────────────────────────────────────
@@ -211,6 +239,30 @@ def get_audit_repo() -> AuditRepository:
     return _audit_repo
 
 
+def get_gver_repo() -> GuidelineVersionRepository:
+    _ensure_init()
+    assert _gver_repo is not None
+    return _gver_repo
+
+
+def get_bcr_repo() -> BrandComplianceRepository:
+    _ensure_init()
+    assert _bcr_repo is not None
+    return _bcr_repo
+
+
+def get_act_repo() -> ActionExecutionRepository:
+    _ensure_init()
+    assert _act_repo is not None
+    return _act_repo
+
+
+def get_onboarding_repo() -> OnboardingRepository:
+    _ensure_init()
+    assert _onb_repo is not None
+    return _onb_repo
+
+
 # ─── Annotated convenience aliases ────────────────────────────────────────────
 
 UserRepoDep = Annotated[UserRepository, Depends(get_user_repo)]
@@ -226,4 +278,8 @@ ApprovalRepoDep = Annotated[ApprovalRepository, Depends(get_approval_repo)]
 IncidentRepoDep = Annotated[IncidentRepository, Depends(get_incident_repo)]
 NotifRepoDep = Annotated[NotificationRepository, Depends(get_notif_repo)]
 AuditRepoDep = Annotated[AuditRepository, Depends(get_audit_repo)]
+GuideVersionRepoDep = Annotated[GuidelineVersionRepository, Depends(get_gver_repo)]
+BrandComplianceRepoDep = Annotated[BrandComplianceRepository, Depends(get_bcr_repo)]
+ActionExecutionRepoDep = Annotated[ActionExecutionRepository, Depends(get_act_repo)]
+OnboardingRepoDep = Annotated[OnboardingRepository, Depends(get_onboarding_repo)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]

@@ -10,7 +10,7 @@
     "preview": "npm run preview --prefix frontend",
     "frontend:dev": "npm run dev --prefix frontend",
     "frontend:build": "npm run build --prefix frontend",
-    "backend:dev": "uvicorn backend.app.main:app --reload --port 8000",
+    "backend:dev": "uvicorn backend.app.main:app --reload --host 127.0.0.1 --port 8000",
     "backend:test": "python -m pytest backend/tests/ -v",
     "backend:seed": "python -m backend.app.seed"
   }

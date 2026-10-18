@@ -178,5 +178,6 @@ def require_min_role(min_role: UserRole):
 
 # Convenience shorthands
 AdminRequired = require_roles(UserRole.ADMIN)
+AdminOnly = AdminRequired
 LeadOrAbove = require_min_role(UserRole.TECHNICAL_LEAD)
 ManagerOrAbove = require_min_role(UserRole.PROJECT_MANAGER)

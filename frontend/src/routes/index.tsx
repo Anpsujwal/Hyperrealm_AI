@@ -8,7 +8,7 @@ import { DashboardPage } from '@/pages/DashboardPage'
 import { KnowledgeHubPage } from '@/pages/KnowledgeHubPage'
 import { MyLearningPage } from '@/pages/MyLearningPage'
 import { MeetingsPage } from '@/pages/MeetingsPage'
-import { TasksPage } from '@/pages/TasksPage'
+import { ScrumPage } from '@/pages/ScrumPage'
 import { OrgChartPage } from '@/pages/OrgChartPage'
 import { AdminConsolePage } from '@/pages/AdminConsolePage'
 import { SettingsPage } from '@/pages/SettingsPage'
@@ -31,7 +31,8 @@ export const routes: RouteObject[] = [
       { path: 'knowledge', element: <KnowledgeHubPage /> },
       { path: 'learning', element: <MyLearningPage /> },
       { path: 'meetings', element: <MeetingsPage /> },
-      { path: 'tasks', element: <TasksPage /> },
+      { path: 'scrum', element: <ScrumPage /> },
+      { path: 'tasks', element: <Navigate to="/app/scrum" replace /> },
       { path: 'org-chart', element: <OrgChartPage /> },
       { path: 'admin', element: <AdminConsolePage /> },
       { path: 'settings', element: <SettingsPage /> },

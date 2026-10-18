@@ -96,7 +96,7 @@ async def seed_all() -> None:
     audit_repo = get_audit_repo()
 
     # Check if database is already seeded
-    existing = await user_repo.get_by_email("alice.chen@hyperrealm.io")
+    existing = await user_repo.get_by_email("ayesha.hussain@hyperrealm.io") or await user_repo.get_by_email("alice.chen@hyperrealm.io")
     if existing:
         print("[OK] Database already seeded, skipping seed")
         return
@@ -122,8 +122,8 @@ async def seed_all() -> None:
 
     alice = UserProfile(
         id="usr_alice",
-        email="alice.chen@hyperrealm.io",
-        name="Alice Chen",
+        email="ayesha.hussain@hyperrealm.io",
+        name="Ayesha Hussain",
         role=UserRole.ADMIN,
         department_id="dept_engineering",
         department_name="Engineering",
@@ -1208,6 +1208,18 @@ async def seed_all() -> None:
         ),
         created_at=_dt(-2, 0),
     ))
+
+    try:
+        from .seed_phase3 import run_phase3_seed
+        await run_phase3_seed()
+    except Exception as e:
+        print("Notice: phase 3 seed:", e)
+
+    try:
+        from .seed_phase4 import run_phase4_seed
+        await run_phase4_seed()
+    except Exception as e:
+        print("Notice: phase 4 seed:", e)
 
     print("[OK] Seed data loaded successfully")
 

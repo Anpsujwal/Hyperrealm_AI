@@ -86,6 +86,9 @@ def create_app() -> FastAPI:
     from .routes.incidents import router as incidents_router
     from .routes.notifications import router as notif_router
     from .routes.admin import router as admin_router
+    from .routes.chat import router as chat_router
+    from .routes.actions import router as actions_router
+    from .routes.onboarding import router as onboarding_router
 
     api_prefix = "/api/v1"
 
@@ -98,9 +101,12 @@ def create_app() -> FastAPI:
     app.include_router(knowledge_router, prefix=api_prefix)
     app.include_router(knowledge_router, prefix=f"{api_prefix}/knowledge")
     app.include_router(learning_router, prefix=api_prefix)
+    app.include_router(onboarding_router, prefix=api_prefix)
     app.include_router(incidents_router, prefix=api_prefix)
     app.include_router(notif_router, prefix=api_prefix)
     app.include_router(admin_router, prefix=api_prefix)
+    app.include_router(chat_router, prefix=api_prefix)
+    app.include_router(actions_router, prefix=api_prefix)
 
     return app
 

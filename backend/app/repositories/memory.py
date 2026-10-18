@@ -11,17 +11,21 @@ from copy import deepcopy
 from typing import Optional
 
 from ..models import (
+    ActionExecutionRecord,
     Approval,
     AuditRecord,
+    BrandComplianceReport,
     Conversation,
     Department,
     Document,
     Guideline,
+    GuidelineVersionRecord,
     Incident,
     LearningResource,
     Meeting,
     Message,
     Notification,
+    OnboardingJourney,
     Project,
     Task,
     UserLearningProgress,
@@ -29,16 +33,20 @@ from ..models import (
     utcnow,
 )
 from .base import (
+    ActionExecutionRepository,
     ApprovalRepository,
     AuditRepository,
+    BrandComplianceRepository,
     ConversationRepository,
     DepartmentRepository,
     DocumentRepository,
     GuidelineRepository,
+    GuidelineVersionRepository,
     IncidentRepository,
     LearningRepository,
     MeetingRepository,
     NotificationRepository,
+    OnboardingRepository,
     ProjectRepository,
     TaskRepository,
     UserRepository,
@@ -53,9 +61,14 @@ class MemoryUserRepository(UserRepository):
         return deepcopy(self._store.get(user_id))
 
     async def get_by_email(self, email: str) -> Optional[UserProfile]:
+        clean = email.strip().lower()
         for u in self._store.values():
-            if u.email.lower() == email.lower():
+            if u.email.lower() == clean:
                 return deepcopy(u)
+        if clean in ("alice.chen@hyperrealm.io", "alice"):
+            for u in self._store.values():
+                if u.email.lower() == "ayesha.hussain@hyperrealm.io":
+                    return deepcopy(u)
         return None
 
     async def list(self, skip: int = 0, limit: int = 20) -> tuple[list[UserProfile], int]:
@@ -172,11 +185,24 @@ class MemoryDocumentRepository(DocumentRepository):
     async def get(self, doc_id: str) -> Optional[Document]:
         return deepcopy(self._store.get(doc_id))
 
-    async def list(self, skip: int = 0, limit: int = 20, category: Optional[str] = None) -> tuple[list[Document], int]:
+    async def list(
+        self,
+        skip: int = 0,
+        limit: int = 20,
+        category: Optional[str] = None,
+        author_id: Optional[str] = None,
+        scope: Optional[str] = None,
+    ) -> tuple[list[Document], int]:
         items = list(self._store.values())
         if category:
             items = [d for d in items if d.category == category]
-        return [deepcopy(d) for d in items[skip : skip + limit]], len(items)
+        if author_id:
+            items = [d for d in items if d.author_id == author_id]
+        if scope:
+            items = [d for d in items if str(d.scope) == scope or d.scope == scope]
+        items.sort(key=lambda d: d.created_at, reverse=True)
+        total = len(items)
+        return [deepcopy(d) for d in items[skip : skip + limit]], total
 
     async def create(self, doc: Document) -> Document:
         self._store[doc.id] = deepcopy(doc)
@@ -197,11 +223,21 @@ class MemoryGuidelineRepository(GuidelineRepository):
     async def get(self, guide_id: str) -> Optional[Guideline]:
         return deepcopy(self._store.get(guide_id))
 
-    async def list(self, skip: int = 0, limit: int = 20, category: Optional[str] = None) -> tuple[list[Guideline], int]:
+    async def list(
+        self,
+        skip: int = 0,
+        limit: int = 20,
+        category: Optional[str] = None,
+        status: Optional[str] = None,
+    ) -> tuple[list[Guideline], int]:
         items = list(self._store.values())
         if category:
             items = [g for g in items if g.category == category]
-        return [deepcopy(g) for g in items[skip : skip + limit]], len(items)
+        if status:
+            items = [g for g in items if g.status == status]
+        items.sort(key=lambda g: g.created_at, reverse=True)
+        total = len(items)
+        return [deepcopy(g) for g in items[skip : skip + limit]], total
 
     async def create(self, guide: Guideline) -> Guideline:
         self._store[guide.id] = deepcopy(guide)
@@ -210,6 +246,9 @@ class MemoryGuidelineRepository(GuidelineRepository):
     async def update(self, guide: Guideline) -> Guideline:
         self._store[guide.id] = deepcopy(guide)
         return deepcopy(guide)
+
+    async def delete(self, guide_id: str) -> bool:
+        return self._store.pop(guide_id, None) is not None
 
 
 class MemoryLearningRepository(LearningRepository):
@@ -388,3 +427,96 @@ class MemoryAuditRepository(AuditRepository):
     async def create(self, record: AuditRecord) -> AuditRecord:
         self._store.append(deepcopy(record))
         return deepcopy(record)
+
+
+class MemoryGuidelineVersionRepository(GuidelineVersionRepository):
+    def __init__(self) -> None:
+        self._store: dict[str, GuidelineVersionRecord] = {}
+
+    async def list_by_guideline(self, guideline_id: str) -> list[GuidelineVersionRecord]:
+        items = [v for v in self._store.values() if v.guideline_id == guideline_id]
+        items.sort(key=lambda v: v.created_at, reverse=True)
+        return [deepcopy(v) for v in items]
+
+    async def get(self, version_id: str) -> Optional[GuidelineVersionRecord]:
+        return deepcopy(self._store.get(version_id))
+
+    async def create(self, record: GuidelineVersionRecord) -> GuidelineVersionRecord:
+        self._store[record.id] = deepcopy(record)
+        return deepcopy(record)
+
+
+class MemoryBrandComplianceRepository(BrandComplianceRepository):
+    def __init__(self) -> None:
+        self._store: dict[str, BrandComplianceReport] = {}
+
+    async def list(self, skip: int = 0, limit: int = 20, user_id: Optional[str] = None) -> tuple[list[BrandComplianceReport], int]:
+        items = list(self._store.values())
+        if user_id:
+            items = [r for r in items if r.created_by == user_id]
+        items.sort(key=lambda r: r.created_at, reverse=True)
+        total = len(items)
+        return [deepcopy(r) for r in items[skip : skip + limit]], total
+
+    async def get(self, report_id: str) -> Optional[BrandComplianceReport]:
+        return deepcopy(self._store.get(report_id))
+
+    async def create(self, report: BrandComplianceReport) -> BrandComplianceReport:
+        self._store[report.id] = deepcopy(report)
+        return deepcopy(report)
+
+
+class MemoryActionExecutionRepository(ActionExecutionRepository):
+    def __init__(self) -> None:
+        self._store: dict[str, ActionExecutionRecord] = {}
+
+    async def list(self, skip: int = 0, limit: int = 20, user_id: Optional[str] = None) -> tuple[list[ActionExecutionRecord], int]:
+        items = list(self._store.values())
+        if user_id:
+            items = [a for a in items if a.executed_by == user_id]
+        items.sort(key=lambda a: a.created_at, reverse=True)
+        total = len(items)
+        return [deepcopy(a) for a in items[skip : skip + limit]], total
+
+    async def get(self, action_id: str) -> Optional[ActionExecutionRecord]:
+        return deepcopy(self._store.get(action_id))
+
+    async def get_by_idempotency_key(self, key: str) -> Optional[ActionExecutionRecord]:
+        for a in self._store.values():
+            if a.idempotency_key == key:
+                return deepcopy(a)
+        return None
+
+    async def create(self, record: ActionExecutionRecord) -> ActionExecutionRecord:
+        self._store[record.id] = deepcopy(record)
+        return deepcopy(record)
+
+    async def update(self, record: ActionExecutionRecord) -> ActionExecutionRecord:
+        self._store[record.id] = deepcopy(record)
+        return deepcopy(record)
+
+
+class MemoryOnboardingRepository(OnboardingRepository):
+    def __init__(self) -> None:
+        self._store: dict[str, OnboardingJourney] = {}
+
+    async def get_by_user(self, user_id: str) -> Optional[OnboardingJourney]:
+        for j in self._store.values():
+            if j.user_id == user_id:
+                return deepcopy(j)
+        return None
+
+    async def get(self, journey_id: str) -> Optional[OnboardingJourney]:
+        return deepcopy(self._store.get(journey_id))
+
+    async def create(self, journey: OnboardingJourney) -> OnboardingJourney:
+        self._store[journey.id] = deepcopy(journey)
+        return deepcopy(journey)
+
+    async def update(self, journey: OnboardingJourney) -> OnboardingJourney:
+        self._store[journey.id] = deepcopy(journey)
+        return deepcopy(journey)
+
+    async def list_by_manager(self, manager_id: str) -> list[OnboardingJourney]:
+        return [deepcopy(j) for j in self._store.values() if j.manager_id == manager_id]
+

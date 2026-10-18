@@ -1,7 +1,5 @@
 import { Link } from 'react-router-dom'
 import {
-  Zap,
-  Sparkles,
   BookOpen,
   BarChart2,
   Users,
@@ -30,8 +28,8 @@ const agents = [
       'Retrieves, synthesises, and explains internal documentation, wikis, and SOPs via Vertex AI Search.',
     icon: BookOpen,
     color: '#6366f1',
-    gradient: 'from-indigo-500/20 to-indigo-900/5',
-    border: 'border-indigo-500/20',
+    gradient: 'from-blue-500/10 via-indigo-500/5 to-transparent dark:from-zinc-900 dark:to-zinc-950',
+    border: 'border-blue-200/80 dark:border-zinc-800',
     features: ['Document retrieval', 'Semantic search', 'Policy Q&A', 'Version diff'],
   },
   {
@@ -42,8 +40,8 @@ const agents = [
       'Analyzes operational metrics, incident patterns, and business data to surface actionable intelligence.',
     icon: BarChart2,
     color: '#8b5cf6',
-    gradient: 'from-violet-500/20 to-violet-900/5',
-    border: 'border-violet-500/20',
+    gradient: 'from-purple-500/10 via-violet-500/5 to-transparent dark:from-zinc-900 dark:to-zinc-950',
+    border: 'border-purple-200/80 dark:border-zinc-800',
     features: ['Trend analysis', 'Incident insights', 'KPI tracking', 'Audit reports'],
   },
   {
@@ -54,8 +52,8 @@ const agents = [
       'Manages tasks, schedules stand-ups, coordinates approvals, and keeps distributed teams aligned.',
     icon: Users,
     color: '#22d3ee',
-    gradient: 'from-cyan-500/20 to-cyan-900/5',
-    border: 'border-cyan-500/20',
+    gradient: 'from-cyan-500/10 via-sky-500/5 to-transparent dark:from-zinc-900 dark:to-zinc-950',
+    border: 'border-cyan-200/80 dark:border-zinc-800',
     features: ['Task assignment', 'Meeting summaries', 'Scrum scheduling', 'Approvals'],
   },
   {
@@ -66,8 +64,8 @@ const agents = [
       'Delivers personalised learning paths, KT workflows, and guideline versioning for every role.',
     icon: GraduationCap,
     color: '#10b981',
-    gradient: 'from-emerald-500/20 to-emerald-900/5',
-    border: 'border-emerald-500/20',
+    gradient: 'from-emerald-500/10 via-teal-500/5 to-transparent dark:from-zinc-900 dark:to-zinc-950',
+    border: 'border-emerald-200/80 dark:border-zinc-800',
     features: ['Learning paths', 'KT workflows', 'Guideline versioning', 'Role-based'],
   },
 ]
@@ -104,12 +102,12 @@ export function LandingPage() {
     <div className="min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)]">
       {/* ── Nav ───────────────────────────────────────────────────────────── */}
       <header className="fixed top-0 left-0 right-0 z-50 h-16 flex items-center px-6 glass border-b border-[var(--border-default)]">
-        <Link to="/" className="flex items-center gap-2.5" aria-label="HYPERREALM home">
-          <div className="h-8.5 w-8.5 rounded-xl bg-gradient-to-tr from-[#4285f4] via-[#9b72cf] to-[#d96570] flex items-center justify-center shadow-[0_0_16px_rgba(155,114,207,0.35)]">
-            <Sparkles className="h-4 w-4 text-white" />
+        <Link to="/" className="flex items-center gap-3" aria-label="HYPERREALM home">
+          <div className="relative h-9 w-9 rounded-xl overflow-hidden border border-cyan-500/40 shadow-[0_0_16px_rgba(6,182,212,0.35)] flex items-center justify-center bg-zinc-950 flex-shrink-0">
+            <img src="/hyperrealm-logo.jpg" alt="HYPERREALM Logo" className="h-full w-full object-cover scale-110" />
           </div>
           <span className="font-display text-base font-bold tracking-tight text-[var(--text-primary)]">HYPERREALM</span>
-          <span className="hidden sm:inline-block px-2 py-0.5 text-[9px] font-semibold rounded-full bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-rose-500/10 text-purple-600 dark:text-purple-300 border border-purple-500/25">
+          <span className="hidden sm:inline-block px-2 py-0.5 text-[9px] font-semibold rounded-full bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-rose-500/10 text-purple-600 dark:text-zinc-300 dark:bg-none dark:bg-zinc-800 border border-purple-500/25 dark:border-zinc-700">
             Gemini Powered
           </span>
         </Link>
@@ -140,20 +138,22 @@ export function LandingPage() {
             <Button variant="ghost" size="sm" className="rounded-full px-4">Sign In</Button>
           </Link>
           <Link to="/signup">
-            <Button variant="gemini" size="sm" className="rounded-full px-4">Get Started</Button>
+            <Button variant="gemini" size="sm" className="rounded-full px-4">Sign Up</Button>
           </Link>
         </div>
       </header>
 
       {/* ── Hero ──────────────────────────────────────────────────────────── */}
       <section className="relative pt-36 pb-28 px-6 overflow-hidden">
-        {/* Gemini Aurora Background */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[550px] rounded-full bg-gradient-to-tr from-blue-600/15 via-purple-600/12 to-rose-600/10 blur-[130px] pointer-events-none" />
-        <div className="absolute top-28 right-1/4 w-[450px] h-[450px] rounded-full bg-purple-600/10 blur-[110px] pointer-events-none" />
+        {/* Gemini Aurora Background — completely hidden in dark mode */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[550px] rounded-full bg-gradient-to-tr from-blue-400/10 via-purple-400/10 to-rose-300/10 dark:hidden blur-[130px] pointer-events-none" />
+        <div className="absolute top-28 right-1/4 w-[450px] h-[450px] rounded-full bg-purple-400/8 dark:hidden blur-[110px] pointer-events-none" />
 
         <div className="relative max-w-5xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-rose-500/10 border border-purple-500/25 text-xs font-semibold text-purple-600 dark:text-purple-300 mb-8 shadow-sm">
-            <Sparkles className="h-3.5 w-3.5 text-purple-500 animate-pulse-subtle" />
+          <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-gradient-to-r from-cyan-500/10 via-purple-500/10 to-rose-500/10 dark:bg-none dark:bg-zinc-800 border border-cyan-500/30 dark:border-zinc-700 text-xs font-semibold text-cyan-600 dark:text-cyan-300 mb-8 shadow-xs dark:shadow-none">
+            <div className="h-4 w-4 rounded-full overflow-hidden flex-shrink-0 border border-cyan-400/40">
+              <img src="/hyperrealm-logo.jpg" alt="" className="h-full w-full object-cover scale-125" />
+            </div>
             <span>AI-Powered Enterprise Intelligence Platform</span>
           </div>
 
@@ -183,7 +183,7 @@ export function LandingPage() {
           </div>
 
           {/* Stats row */}
-          <div className="mt-20 grid grid-cols-2 md:grid-cols-4 gap-6 max-w-3xl mx-auto p-6 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-surface)]/60 backdrop-blur-md">
+          <div className="mt-20 grid grid-cols-2 md:grid-cols-4 gap-6 max-w-3xl mx-auto p-6 rounded-2xl border border-[var(--border-default)] dark:border-zinc-800 bg-[var(--bg-surface)]/60 dark:bg-zinc-900/80 backdrop-blur-md">
             {stats.map((s) => (
               <div key={s.label} className="text-center">
                 <p className="font-display text-3xl font-bold text-gemini">{s.value}</p>
@@ -295,8 +295,8 @@ export function LandingPage() {
       {/* ── CTA ───────────────────────────────────────────────────────────── */}
       <section className="py-24 px-6">
         <div className="max-w-3xl mx-auto text-center">
-          <div className="relative rounded-[var(--radius-xl)] border border-[var(--border-strong)] bg-gradient-to-br from-indigo-900/30 to-[var(--bg-surface)] p-12 overflow-hidden">
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(99,102,241,0.12)_0%,transparent_70%)] pointer-events-none" />
+          <div className="relative rounded-[var(--radius-xl)] border border-indigo-200/70 dark:border-zinc-800 bg-gradient-to-br from-indigo-50/90 via-violet-50/50 to-[var(--bg-surface)] dark:from-zinc-900 dark:to-zinc-950 p-12 overflow-hidden shadow-sm dark:shadow-none">
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(99,102,241,0.08)_0%,transparent_70%)] dark:hidden pointer-events-none" />
             <div className="relative">
               <h2 className="text-3xl md:text-4xl font-bold mb-4">
                 Ready to transform your organisation?
@@ -306,7 +306,7 @@ export function LandingPage() {
                 productivity potential of AI.
               </p>
               <Link to="/signup">
-                <Button size="lg" className="glow-indigo">
+                <Button size="lg" className="glow-indigo dark:shadow-none">
                   Create Your Workspace
                   <ArrowRight className="h-4 w-4" />
                 </Button>
@@ -317,11 +317,11 @@ export function LandingPage() {
       </section>
 
       {/* ── Footer ────────────────────────────────────────────────────────── */}
-      <footer className="border-t border-[var(--border-default)] py-8 px-6">
+      <footer className="border-t border-[var(--border-default)] dark:border-zinc-800 py-8 px-6">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2.5">
-            <div className="h-6 w-6 rounded-md bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
-              <Zap className="h-3 w-3 text-white" />
+            <div className="h-7 w-7 rounded-lg overflow-hidden border border-cyan-500/30 shadow-xs flex items-center justify-center bg-zinc-950 flex-shrink-0">
+              <img src="/hyperrealm-logo.jpg" alt="HYPERREALM" className="h-full w-full object-cover scale-110" />
             </div>
             <span className="text-sm font-bold tracking-wide">HYPERREALM</span>
           </div>

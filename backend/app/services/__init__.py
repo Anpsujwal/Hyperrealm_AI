@@ -1,0 +1,3 @@
+"""
+HYPERREALM shared services package.
+"""

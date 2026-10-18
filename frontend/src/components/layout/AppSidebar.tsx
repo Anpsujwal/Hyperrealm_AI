@@ -1,4 +1,6 @@
+import { useState, useEffect } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
+import { meetingsApi } from '@/lib/api'
 import {
   MessageSquare,
   LayoutDashboard,
@@ -10,7 +12,6 @@ import {
   ShieldCheck,
   Settings,
   LogOut,
-  Sparkles,
   Sun,
   Moon,
   PanelLeftClose,
@@ -34,6 +35,7 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   CheckSquare,
   Network,
   ShieldCheck,
+  Settings,
 }
 
 interface NavGroup {
@@ -47,8 +49,8 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { id: 'dashboard', label: 'Dashboard', path: '/app/dashboard', icon: 'LayoutDashboard' },
       { id: 'chat', label: 'AI Copilot', path: '/app/chat', icon: 'MessageSquare' },
-      { id: 'tasks', label: 'Tasks & Approvals', path: '/app/tasks', icon: 'CheckSquare', badge: 3 },
-      { id: 'meetings', label: 'Meetings & Scrum', path: '/app/meetings', icon: 'CalendarDays' },
+      { id: 'meetings', label: 'Meetings & Calls', path: '/app/meetings', icon: 'CalendarDays' },
+      { id: 'scrum', label: 'Scrum & Sprints', path: '/app/scrum', icon: 'CheckSquare' },
     ],
   },
   {
@@ -81,7 +83,7 @@ function SidebarNavItem({ item, isCollapsed }: { item: NavItem; isCollapsed: boo
                 cn(
                   'relative flex items-center justify-center h-10 w-10 mx-auto rounded-xl text-sm font-medium transition-all duration-200',
                   isActive
-                    ? 'bg-gradient-to-tr from-blue-500/15 via-purple-500/15 to-rose-500/10 text-[var(--accent-indigo)] border border-purple-500/30 shadow-sm'
+                    ? 'bg-gradient-to-tr from-indigo-50 via-purple-50/70 to-blue-50/50 dark:bg-none dark:bg-zinc-800 text-[var(--accent-indigo)] border border-indigo-200/80 dark:border-zinc-700 shadow-xs dark:shadow-none'
                     : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]'
                 )
               }
@@ -95,7 +97,7 @@ function SidebarNavItem({ item, isCollapsed }: { item: NavItem; isCollapsed: boo
                     )}
                   />
                   {item.badge != null && item.badge > 0 && (
-                    <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 ring-2 ring-[var(--bg-surface)]" />
+                    <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 dark:bg-none dark:bg-indigo-500 ring-2 ring-[var(--bg-surface)]" />
                   )}
                 </>
               )}
@@ -129,7 +131,7 @@ function SidebarNavItem({ item, isCollapsed }: { item: NavItem; isCollapsed: boo
         cn(
           'group relative flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 select-none',
           isActive
-            ? 'bg-gradient-to-r from-blue-500/15 via-purple-500/10 to-transparent text-[var(--accent-indigo)] font-semibold border border-purple-500/20 shadow-sm'
+            ? 'bg-gradient-to-r from-indigo-50/90 via-purple-50/60 to-transparent dark:bg-none dark:bg-zinc-800/90 text-[var(--accent-indigo)] font-semibold border border-indigo-200/70 dark:border-zinc-700 shadow-xs dark:shadow-none'
             : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]'
         )
       }
@@ -138,7 +140,7 @@ function SidebarNavItem({ item, isCollapsed }: { item: NavItem; isCollapsed: boo
         <>
           {/* Subtle left active bar */}
           {isActive && (
-            <span className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-gradient-to-b from-[#4285f4] via-[#9b72cf] to-[#d96570]" />
+            <span className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-gradient-to-b from-[#4285f4] via-[#9b72cf] to-[#d96570] dark:bg-none dark:bg-indigo-500" />
           )}
 
           <Icon
@@ -172,6 +174,24 @@ export function AppSidebar() {
     navigate('/')
   }
 
+  const [pendingMeetingCount, setPendingMeetingCount] = useState(0)
+
+  useEffect(() => {
+    if (!user) return
+    const checkPending = async () => {
+      try {
+        const res = await meetingsApi.listMeetings()
+        const pending = (res.items || []).filter(
+          (m) => m.attendee_ids?.includes(user.id) && m.attendee_status?.[user.id] === 'pending'
+        )
+        setPendingMeetingCount(pending.length)
+      } catch {}
+    }
+    checkPending()
+    const interval = setInterval(checkPending, 20000)
+    return () => clearInterval(interval)
+  }, [user])
+
   return (
     <aside
       className={cn(
@@ -190,8 +210,8 @@ export function AppSidebar() {
         )}
       >
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="relative flex-shrink-0 h-9 w-9 rounded-xl bg-gradient-to-tr from-[#4285f4] via-[#9b72cf] to-[#d96570] flex items-center justify-center shadow-[0_0_20px_rgba(155,114,207,0.35)]">
-            <Sparkles className="h-4.5 w-4.5 text-white" />
+          <div className="relative flex-shrink-0 h-9 w-9 rounded-xl overflow-hidden border border-cyan-500/40 shadow-[0_0_16px_rgba(6,182,212,0.35)] flex items-center justify-center bg-zinc-950">
+            <img src="/hyperrealm-logo.jpg" alt="HYPERREALM" className="h-full w-full object-cover scale-110" />
           </div>
           {!isCollapsed && (
             <div className="flex flex-col min-w-0">
@@ -252,16 +272,22 @@ export function AppSidebar() {
                   {group.label}
                 </div>
               )}
-              {visibleItems.map((item) => (
-                <SidebarNavItem key={item.id} item={item} isCollapsed={isCollapsed} />
-              ))}
+              {visibleItems.map((item) => {
+                const badge = item.id === 'meetings' ? (pendingMeetingCount > 0 ? pendingMeetingCount : undefined) : item.badge
+                return (
+                  <SidebarNavItem key={item.id} item={{ ...item, badge }} isCollapsed={isCollapsed} />
+                )
+              })}
             </div>
           )
         })}
       </nav>
 
       {/* ─── Footer Section ─────────────────────────────────────────────── */}
-      <div className="flex-shrink-0 border-t border-[var(--border-default)] p-2 space-y-1.5 bg-[var(--bg-surface)]">
+      <div className={cn(
+        'flex-shrink-0 border-t border-[var(--border-default)] bg-[var(--bg-surface)]',
+        isCollapsed ? 'p-2 space-y-2' : 'p-2 space-y-1'
+      )}>
         {/* Theme switcher */}
         {isCollapsed ? (
           <TooltipPrimitive.Provider delayDuration={100}>
@@ -269,13 +295,13 @@ export function AppSidebar() {
               <TooltipPrimitive.Trigger asChild>
                 <button
                   onClick={toggleTheme}
-                  className="flex items-center justify-center h-10 w-10 mx-auto rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors cursor-pointer"
+                  className="relative flex items-center justify-center h-10 w-10 mx-auto rounded-xl text-sm font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-all duration-200 cursor-pointer"
                   aria-label="Toggle theme"
                 >
                   {resolvedTheme === 'dark' ? (
-                    <Sun className="h-4 w-4 text-amber-400" />
+                    <Sun className="h-4.5 w-4.5 text-amber-400" />
                   ) : (
-                    <Moon className="h-4 w-4 text-indigo-500" />
+                    <Moon className="h-4.5 w-4.5 text-indigo-500" />
                   )}
                 </button>
               </TooltipPrimitive.Trigger>
@@ -283,7 +309,7 @@ export function AppSidebar() {
                 <TooltipPrimitive.Content
                   side="right"
                   sideOffset={10}
-                  className="z-50 px-2.5 py-1 text-xs font-medium rounded-lg bg-[var(--bg-overlay)] border border-[var(--border-strong)] text-[var(--text-primary)] shadow-md"
+                  className="z-50 px-3 py-1.5 text-xs font-semibold rounded-xl bg-[var(--bg-overlay)] border border-[var(--border-strong)] text-[var(--text-primary)] shadow-xl backdrop-blur-md"
                 >
                   Switch to {resolvedTheme === 'dark' ? 'Light' : 'Dark'} mode
                   <TooltipPrimitive.Arrow className="fill-[var(--border-strong)]" />
@@ -294,79 +320,53 @@ export function AppSidebar() {
         ) : (
           <button
             onClick={toggleTheme}
-            className="flex items-center justify-between w-full px-3 py-2 rounded-lg text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors cursor-pointer"
+            className="group relative flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-all duration-200 cursor-pointer select-none"
           >
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-3">
               {resolvedTheme === 'dark' ? (
-                <Sun className="h-4 w-4 text-amber-400" />
+                <Sun className="h-4.5 w-4.5 text-amber-400 flex-shrink-0" />
               ) : (
-                <Moon className="h-4 w-4 text-indigo-500" />
+                <Moon className="h-4.5 w-4.5 text-indigo-500 flex-shrink-0" />
               )}
-              <span>Theme</span>
+              <span className="truncate">Theme</span>
             </div>
-            <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded bg-[var(--bg-elevated)] border border-[var(--border-default)] text-[var(--text-muted)]">
+            <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full bg-[var(--bg-elevated)] border border-[var(--border-default)] text-[var(--text-muted)]">
               {resolvedTheme}
             </span>
           </button>
         )}
 
-        {/* Settings link */}
+        {/* Settings nav item - perfectly aligned with all sidebar nav items */}
+        <SidebarNavItem
+          item={{ id: 'settings', label: 'Settings', path: '/app/settings', icon: 'Settings' }}
+          isCollapsed={isCollapsed}
+        />
+
+        {/* User profile card */}
         {isCollapsed ? (
           <TooltipPrimitive.Provider delayDuration={100}>
             <TooltipPrimitive.Root>
               <TooltipPrimitive.Trigger asChild>
-                <NavLink
-                  to="/app/settings"
-                  className={({ isActive }) =>
-                    cn(
-                      'flex items-center justify-center h-10 w-10 mx-auto rounded-lg transition-colors',
-                      isActive
-                        ? 'bg-indigo-500/15 text-[var(--accent-indigo)]'
-                        : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]'
-                    )
-                  }
-                >
-                  <Settings className="h-4 w-4" />
-                </NavLink>
+                <div className="relative flex items-center justify-center h-10 w-10 mx-auto rounded-xl hover:bg-[var(--bg-elevated)] transition-all duration-200 cursor-pointer">
+                  <Avatar name={user?.name ?? 'User'} size="sm" statusDot="online" />
+                </div>
               </TooltipPrimitive.Trigger>
               <TooltipPrimitive.Portal>
                 <TooltipPrimitive.Content
                   side="right"
                   sideOffset={10}
-                  className="z-50 px-2.5 py-1 text-xs font-medium rounded-lg bg-[var(--bg-overlay)] border border-[var(--border-strong)] text-[var(--text-primary)] shadow-md"
+                  className="z-50 px-3 py-1.5 text-xs font-semibold rounded-xl bg-[var(--bg-overlay)] border border-[var(--border-strong)] text-[var(--text-primary)] shadow-xl backdrop-blur-md"
                 >
-                  Settings
+                  <p className="font-semibold">{user?.name ?? 'User'}</p>
+                  <p className="text-[10px] text-[var(--text-muted)] capitalize">{user?.role?.replace(/_/g, ' ') ?? 'Member'}</p>
                   <TooltipPrimitive.Arrow className="fill-[var(--border-strong)]" />
                 </TooltipPrimitive.Content>
               </TooltipPrimitive.Portal>
             </TooltipPrimitive.Root>
           </TooltipPrimitive.Provider>
         ) : (
-          <NavLink
-            to="/app/settings"
-            className={({ isActive }) =>
-              cn(
-                'flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-xs font-medium transition-colors',
-                isActive
-                  ? 'bg-indigo-500/10 text-[var(--accent-indigo)] font-semibold'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]'
-              )
-            }
-          >
-            <Settings className="h-4 w-4 text-[var(--text-muted)]" />
-            <span>Settings</span>
-          </NavLink>
-        )}
-
-        {/* User profile card */}
-        <div
-          className={cn(
-            'flex items-center gap-2.5 p-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-elevated)]',
-            isCollapsed && 'justify-center p-1.5'
-          )}
-        >
-          <Avatar name={user?.name ?? 'User'} size="sm" statusDot="online" />
-          {!isCollapsed && (
+          <div className="flex items-center gap-2.5 p-2 rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]">
+            <Avatar name={user?.name ?? 'User'} size="sm" statusDot="online" />
             <div className="flex-1 min-w-0">
               <p className="text-xs font-semibold text-[var(--text-primary)] truncate leading-tight">
                 {user?.name ?? 'User'}
@@ -375,18 +375,16 @@ export function AppSidebar() {
                 {user?.role?.replace(/_/g, ' ') ?? 'Member'}
               </p>
             </div>
-          )}
-          {!isCollapsed && (
             <button
               onClick={handleLogout}
-              className="text-[var(--text-muted)] hover:text-[var(--accent-rose)] hover:bg-rose-500/10 transition-colors p-1 rounded cursor-pointer"
+              className="text-[var(--text-muted)] hover:text-[var(--accent-rose)] hover:bg-rose-500/10 transition-colors p-1.5 rounded-lg cursor-pointer"
               title="Sign out"
               aria-label="Sign out"
             >
-              <LogOut className="h-3.5 w-3.5" />
+              <LogOut className="h-4 w-4" />
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </aside>
   )

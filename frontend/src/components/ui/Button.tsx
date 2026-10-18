@@ -30,8 +30,8 @@ const buttonVariants = cva(
           'hover:bg-[var(--accent-indigo)] hover:text-white',
         ],
         gemini: [
-          'bg-gradient-to-r from-[#4285f4] via-[#9b72cf] to-[#d96570] text-white font-medium shadow-md',
-          'hover:opacity-95 hover:shadow-[0_0_24px_rgba(155,114,207,0.4)] hover:scale-[1.01] active:scale-[0.98]',
+          'bg-gradient-to-r from-[#4285f4] via-[#9b72cf] to-[#d96570] dark:bg-none dark:bg-indigo-600 text-white font-medium shadow-md dark:shadow-none',
+          'hover:opacity-95 hover:shadow-[0_0_24px_rgba(155,114,207,0.4)] dark:hover:shadow-none dark:hover:bg-indigo-500 hover:scale-[1.01] active:scale-[0.98]',
         ],
         destructive: [
           'bg-[var(--accent-rose)] text-white',

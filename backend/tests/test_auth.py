@@ -8,21 +8,21 @@ from .conftest import auth
 async def test_login_success(client):
     resp = await client.post(
         "/api/v1/auth/login",
-        json={"email": "alice.chen@hyperrealm.io", "password": "Password123!"},
+        json={"email": "ayesha.hussain@hyperrealm.io", "password": "Password123!"},
     )
     assert resp.status_code == 200
     data = resp.json()
     assert "access_token" in data
     assert data["token_type"] == "bearer"
     assert data["user"]["role"] == "admin"
-    assert data["user"]["email"] == "alice.chen@hyperrealm.io"
+    assert data["user"]["email"] == "ayesha.hussain@hyperrealm.io"
 
 
 @pytest.mark.asyncio
 async def test_login_wrong_password(client):
     resp = await client.post(
         "/api/v1/auth/login",
-        json={"email": "alice.chen@hyperrealm.io", "password": "wrongpassword"},
+        json={"email": "ayesha.hussain@hyperrealm.io", "password": "wrongpassword"},
     )
     assert resp.status_code == 401
 
@@ -41,7 +41,7 @@ async def test_get_me_authenticated(client, alice_token):
     resp = await client.get("/api/v1/auth/me", headers=auth(alice_token))
     assert resp.status_code == 200
     data = resp.json()
-    assert data["email"] == "alice.chen@hyperrealm.io"
+    assert data["email"] == "ayesha.hussain@hyperrealm.io"
     assert data["role"] == "admin"
     # hashed_password must never be exposed
     assert "hashed_password" not in data

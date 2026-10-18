@@ -86,31 +86,28 @@ async def run_phase3_seed():
         priya.project_ids = ["proj_phoenix", "proj_sentinel"]
         await user_repo.update(priya)
 
-    # Check or create Ayesha Hussain (QA Engineer, reports to Priya Sharma)
+    # Ensure Ayesha Hussain is Admin / CTO
     ayesha = await user_repo.get_by_email("ayesha.hussain@hyperrealm.io")
     if not ayesha:
         ayesha = UserProfile(
-            id="usr_ayesha",
+            id="usr_alice",
             email="ayesha.hussain@hyperrealm.io",
             name="Ayesha Hussain",
-            role=UserRole.QA_ENGINEER,
+            role=UserRole.ADMIN,
             department_id="dept_engineering",
             department_name="Engineering",
-            job_title="QA Engineer",
-            manager_id="usr_priya",
+            job_title="CTO",
+            manager_id=None,
             hashed_password=pw,
-            skills=["Python Automation", "Pytest", "API Testing", "Postman", "Defect Management", "Jira"],
-            project_ids=["proj_phoenix"],
+            skills=["Leadership", "Architecture", "Cloud"],
             status=UserStatus.ACTIVE,
-            created_at=_dt(-80),
+            created_at=_dt(-180),
         )
         await user_repo.create(ayesha)
-        print("Created Ayesha Hussain")
     else:
-        ayesha.role = UserRole.QA_ENGINEER
-        ayesha.job_title = "QA Engineer"
-        ayesha.manager_id = "usr_priya"
-        ayesha.project_ids = ["proj_phoenix"]
+        ayesha.role = UserRole.ADMIN
+        ayesha.job_title = "CTO"
+        ayesha.manager_id = None
         await user_repo.update(ayesha)
 
     # Update Eve Russo to report to Priya Sharma

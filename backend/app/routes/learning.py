@@ -80,6 +80,7 @@ async def get_learning_paths(
     current_user: CurrentUser,
     learning_repo: LearningRepoDep,
     role: str | None = None,
+    only_role_and_mandatory: bool = Query(False, description="Filter to only target role courses and mandatory courses"),
 ) -> dict:
     from datetime import timedelta
     target_role = role or current_user.role.value
@@ -93,6 +94,13 @@ async def get_learning_paths(
         req_role_strs = [r_role.value if hasattr(r_role, "value") else str(r_role) for r_role in r.required_for_roles]
         is_mandatory = target_role in req_role_strs or "employee" in req_role_strs
         prog = progress_map.get(r.id)
+        has_assignment = prog is not None
+
+        # If filtered to role & mandatory only, skip courses designated exclusively for other roles
+        # UNLESS the course was explicitly assigned to the user (e.g. manager approved recommendation)
+        if only_role_and_mandatory and not is_mandatory and target_role not in req_role_strs and not has_assignment:
+            continue
+
         prereqs_met = all(p_id in completed_ids for p_id in r.prerequisites) if r.prerequisites else True
         due_dt = prog.due_date if prog and prog.due_date else (current_user.created_at + timedelta(days=r.due_days or 30))
 
@@ -110,6 +118,7 @@ async def get_learning_paths(
             "due_days": r.due_days,
             "due_date": due_dt.isoformat() if due_dt else None,
             "is_mandatory": is_mandatory,
+            "is_manager_approved": has_assignment and not is_mandatory and target_role not in req_role_strs,
             "status": prog.status.value if prog else "not_started",
             "progress_pct": prog.progress_pct if prog else 0,
             "started_at": prog.started_at.isoformat() if prog and prog.started_at else None,
@@ -123,6 +132,8 @@ async def get_learning_paths(
         "completed_count": sum(1 for i in items if i["status"] == "completed"),
         "in_progress_count": sum(1 for i in items if i["status"] == "in_progress"),
         "items": items,
+        "onboarding_steps": [],
+        "onboardingSteps": [],
     }
 
 
@@ -160,4 +171,15 @@ async def update_progress(
         )
 
     saved = await learning_repo.upsert_progress(progress)
+
+    # Sync onboarding journey if active
+    try:
+        from ..services.onboarding_service import get_onboarding_service
+        service = get_onboarding_service()
+        journey = await service.onb_repo.get_by_user(current_user.id)
+        if journey:
+            await service.sync_journey_progress(journey)
+    except Exception:
+        pass
+
     return LearningProgressOut.model_validate(saved.model_dump())
