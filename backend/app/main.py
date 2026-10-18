@@ -5,10 +5,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -27,7 +28,7 @@ async def lifespan(app: FastAPI):
     init_repositories()
     logger.info("Repositories initialised")
 
-    if settings.is_dev:
+    if settings.is_dev or os.environ.get("AUTO_SEED", "true").lower() in ("true", "1"):
         from .seed import seed_all
         await seed_all()
         logger.info("Seed data loaded")
@@ -107,6 +108,32 @@ def create_app() -> FastAPI:
     app.include_router(admin_router, prefix=api_prefix)
     app.include_router(chat_router, prefix=api_prefix)
     app.include_router(actions_router, prefix=api_prefix)
+
+    # ── Frontend static assets (Production SPA) ──────────────────────────────
+    dist_candidates = [
+        os.environ.get("FRONTEND_DIST", ""),
+        "/app/frontend/dist",
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist")),
+    ]
+    frontend_dist = next((p for p in dist_candidates if p and os.path.isdir(p)), None)
+
+    if frontend_dist and (settings.APP_ENV == "production" or os.environ.get("SERVE_FRONTEND", "").lower() in ("true", "1")):
+        from fastapi.staticfiles import StaticFiles
+        from starlette.exceptions import HTTPException as StarletteHTTPException
+
+        class SPAStaticFiles(StaticFiles):
+            async def get_response(self, path: str, scope):
+                try:
+                    return await super().get_response(path, scope)
+                except (HTTPException, StarletteHTTPException) as exc:
+                    if exc.status_code == 404:
+                        norm = path.replace(os.sep, "/").lstrip("/")
+                        if norm.startswith("api/") or norm.startswith("health") or norm.startswith("docs") or norm == "openapi.json":
+                            raise
+                        return await super().get_response("index.html", scope)
+                    raise
+
+        app.mount("/", SPAStaticFiles(directory=frontend_dist, html=True), name="spa")
 
     return app
 

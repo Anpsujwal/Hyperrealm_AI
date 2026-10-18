@@ -149,7 +149,7 @@ async def test_create_conversation_and_add_messages(client, carol_token):
 @pytest.mark.asyncio
 async def test_create_and_list_meetings(client, bob_token):
     create_resp = await client.post(
-        "/api/v1/meetings",
+        "/api/v1/meetings?force=true",
         json={
             "title": "Backend Design Review",
             "type": "general",

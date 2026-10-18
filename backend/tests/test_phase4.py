@@ -17,8 +17,8 @@ async def test_demo_mode_configuration_without_credentials():
     settings = get_settings()
     diagnostic = settings.validate_cloud_configuration()
     assert diagnostic["app_mode"] == "demo"
-    assert diagnostic["configured_model"] == "gemini-2.5-flash"
-    assert diagnostic["fallback_model"] == "gemini-2.0-flash"
+    assert diagnostic["configured_model"] == settings.GEMINI_MODEL
+    assert diagnostic["fallback_model"] == settings.GEMINI_FALLBACK_MODEL
     assert "local_storage_dir" in diagnostic
 
 

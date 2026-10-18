@@ -1,28 +1,39 @@
 # HYPERREALM backend Python dependencies
 # Install with: pip install -r backend/requirements.txt
 
-# ── Core framework ─────────────────────────────────────────────────────────────
+# ── Core framework & Web Server ────────────────────────────────────────────────
 fastapi>=0.115.0,<1.0
 uvicorn[standard]>=0.30.0,<1.0
-python-multipart>=0.0.9  # form data support
+python-multipart>=0.0.9            # Multipart form data & file uploads
 
-# ── Data validation ────────────────────────────────────────────────────────────
+# ── Data Validation & Configuration ────────────────────────────────────────────
 pydantic>=2.8.0,<3.0
-pydantic-settings>=2.4.0,<3.0  # Settings from env / .env file
-email-validator>=2.0.0         # EmailStr validation for Pydantic models
+pydantic-settings>=2.4.0,<3.0      # Typed settings from env / .env
+python-dotenv>=1.0.0               # .env file support
+email-validator>=2.0.0             # EmailStr validation for Pydantic models
 
-# ── Auth ──────────────────────────────────────────────────────────────────────
-python-jose[cryptography]>=3.3.0  # JWT encoding / decoding
+# ── Authentication & Security ──────────────────────────────────────────────────
+python-jose[cryptography]>=3.3.0    # JWT token encoding & verification
 bcrypt>=4.0.0                      # Password hashing
-passlib>=1.7.4                     # Password utilities (optional)
+passlib>=1.7.4                     # Password hash verification
 
-# ── Firestore (optional, skip if not using cloud) ─────────────────────────────
-firebase-admin>=6.5.0
+# ── Networking & HTTP Clients ─────────────────────────────────────────────────
+requests>=2.31.0                   # Synchronous HTTP client (Google Calendar / REST APIs)
+httpx>=0.27.0                      # Async HTTP client and FastAPI TestClient
+
+# ── Document Parsing & Ingestion ───────────────────────────────────────────────
+pypdf>=5.0.0                       # PDF extraction for Knowledge Hub
+
+# ── AI, LLM & Multi-Agent Framework ───────────────────────────────────────────
+google-genai>=1.0.0                # Google GenAI SDK (Gemini 2.5 / 3.8 models)
+google-adk>=2.0.0                  # Google Agent Development Kit (LlmAgent, Runner)
+
+# ── Google Cloud Integrations ──────────────────────────────────────────────────
+google-auth>=2.20.0                # Service account & OAuth credentials
+google-cloud-storage>=2.10.0       # Google Cloud Storage bucket adapter
+google-cloud-firestore>=2.10.0     # Cloud Firestore NoSQL repository adapter
+firebase-admin>=6.5.0              # Firebase Admin SDK
 
 # ── Testing ───────────────────────────────────────────────────────────────────
 pytest>=8.0
 pytest-asyncio>=0.23
-httpx>=0.27.0  # async test client for FastAPI
-
-google-genai>=1.0.0
-google-adk>=2.0.0

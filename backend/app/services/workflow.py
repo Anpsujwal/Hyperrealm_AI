@@ -44,15 +44,37 @@ logger = logging.getLogger("hyperrealm.workflow")
 
 
 class WorkflowService:
-    def __init__(self):
-        self.approval_repo = get_approval_repo()
-        self.act_repo = get_act_repo()
-        self.audit_repo = get_audit_repo()
-        self.task_repo = get_task_repo()
-        self.meeting_repo = get_meeting_repo()
-        self.notif_repo = get_notif_repo()
-        self.learning_repo = get_learning_repo()
-        self.user_repo = get_user_repo()
+    @property
+    def approval_repo(self):
+        return get_approval_repo()
+
+    @property
+    def act_repo(self):
+        return get_act_repo()
+
+    @property
+    def audit_repo(self):
+        return get_audit_repo()
+
+    @property
+    def task_repo(self):
+        return get_task_repo()
+
+    @property
+    def meeting_repo(self):
+        return get_meeting_repo()
+
+    @property
+    def notif_repo(self):
+        return get_notif_repo()
+
+    @property
+    def learning_repo(self):
+        return get_learning_repo()
+
+    @property
+    def user_repo(self):
+        return get_user_repo()
 
     async def validate_and_propose_action(
         self,

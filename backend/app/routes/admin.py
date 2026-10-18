@@ -335,3 +335,52 @@ async def list_ingestion_errors(
         page_size=page_size,
         has_next=False,
     )
+
+
+# ─── Integrations Status (admin-only) ─────────────────────────────────────────
+
+@router.get("/integrations/status", summary="Cloud and AI Integration Diagnostics (admin)")
+async def admin_integrations_status(
+    _: UserProfile = AdminRequired,
+) -> dict:
+    from .health import integrations_status
+    return await integrations_status()
+
+
+# ─── Reprocess Corrupted Documents (admin-only) ─────────────────────────────
+
+@router.post("/reprocess-documents", summary="Reprocess and repair documents with legacy or unreadable content (admin)")
+async def reprocess_documents(
+    doc_repo: DocRepoDep,
+    audit_repo: AuditRepoDep,
+    current_user: CurrentUser,
+    _: UserProfile = AdminRequired,
+) -> dict:
+    from ..services.ingestion import get_ingestion
+    ingestion = get_ingestion()
+    docs, total = await doc_repo.list(skip=0, limit=200)
+    repaired_ids = []
+
+    stream_artifacts = ["/FlateDecode", "/Filter /", "/XObject", "endstream", "/Length "]
+    for doc in docs:
+        content = (doc.content or doc.extracted_text or "")
+        if any(a in content for a in stream_artifacts) or (doc.file_type == "pdf" and not content.strip()):
+            reprocessed = await ingestion.reprocess_document(doc)
+            await doc_repo.update(reprocessed.id, reprocessed)
+            repaired_ids.append(reprocessed.id)
+
+    await audit_repo.create(AuditRecord(
+        actor_id=current_user.id,
+        actor_email=current_user.email,
+        action=AuditAction.UPDATE,
+        resource_type="document",
+        description=f"Admin triggered document reprocessing: repaired {len(repaired_ids)} documents",
+        metadata={"repaired_count": len(repaired_ids), "repaired_ids": repaired_ids},
+    ))
+    return {
+        "status": "success",
+        "scanned_count": total,
+        "repaired_count": len(repaired_ids),
+        "repaired_ids": repaired_ids,
+    }
+

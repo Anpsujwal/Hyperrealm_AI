@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Optional
 
+from ..config import get_settings
 from ..dependencies import get_guide_repo, get_learning_repo, get_project_repo
 from ..models import (
     DocumentScope,
@@ -20,6 +21,7 @@ from ..models import (
 )
 from ..services.onboarding_service import get_onboarding_service
 from ..services.retrieval import EnterpriseRetrievalService
+from .adk_runtime import call_gemini_model
 
 logger = logging.getLogger("hyperrealm.agents.onboard")
 
@@ -181,11 +183,28 @@ class OnboardAgent:
                 + "\n\nTrack your live journey, request course approvals, and submit forms in the **My Learning** hub."
             )
 
+        settings = get_settings()
+        is_sim = settings.is_demo
+
+        if not settings.is_demo:
+            try:
+                sys_inst = (
+                    f"You are the Hyperrealm Onboarding Specialist serving new hire {user.name} ({role_label}). "
+                    f"Structure your guidance clearly, encouraging progress on their next action: '{journey.next_action}'."
+                )
+                live_text = await call_gemini_model(prompt=f"User Query: {prompt}\n\nCurrent Journey Status:\n{response}", system_instruction=sys_inst)
+                if live_text:
+                    response = live_text
+                    is_sim = False
+            except Exception as exc:
+                logger.warning("Gemini onboarding synthesis failed (%s), using local response", exc)
+
         return {
             "agent_id": self.name,
             "response": response,
             "citations": citations,
             "proposed_actions": proposed_actions,
+            "is_simulated": is_sim,
             "learning_summary": {
                 "role": role_label,
                 "completion_pct": journey.completion_pct,

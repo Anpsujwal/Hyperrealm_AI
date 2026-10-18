@@ -85,7 +85,7 @@ def create_access_token(user_id: str, role: UserRole) -> tuple[str, int]:
         "iat": datetime.utcnow(),
         "iss": "hyperrealm",
     }
-    token = jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+    token = jwt.encode(payload, settings.effective_jwt_secret, algorithm=settings.JWT_ALGORITHM)
     return token, int(expires_delta.total_seconds())
 
 
@@ -93,7 +93,7 @@ def _decode_token(token: str) -> dict:
     settings = get_settings()
     return jwt.decode(
         token,
-        settings.JWT_SECRET,
+        settings.effective_jwt_secret,
         algorithms=[settings.JWT_ALGORITHM],
         options={"verify_aud": False},
     )

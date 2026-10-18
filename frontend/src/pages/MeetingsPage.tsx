@@ -31,6 +31,13 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { meetingsApi, usersApi, notificationsApi } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
+import {
+  formatISTTime,
+  formatISTDate,
+  formatISTDateTime,
+  toISTInputValue,
+  fromISTInputValue,
+} from '@/lib/utils'
 import type { MeetingItem, CalendarAvailabilityResult, User, NotificationItem } from '@/types'
 
 // Mock transcript seed for meetings that do not have recorded notes yet
@@ -64,6 +71,7 @@ export function MeetingsPage() {
   // Modals & Active Call
   const [showScheduleModal, setShowScheduleModal] = useState(false)
   const [selectedMeetingNotes, setSelectedMeetingNotes] = useState<MeetingItem | null>(null)
+  const [selectedUpcomingMeeting, setSelectedUpcomingMeeting] = useState<MeetingItem | null>(null)
   const [activeCallMeeting, setActiveCallMeeting] = useState<MeetingItem | null>(null)
   const [calendarSyncing, setCalendarSyncing] = useState(false)
   const [calendarSyncedAt, setCalendarSyncedAt] = useState<string>('Just now')
@@ -159,10 +167,34 @@ export function MeetingsPage() {
     setCalendarSyncing(true)
     setTimeout(() => {
       setCalendarSyncing(false)
-      setCalendarSyncedAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
+      setCalendarSyncedAt(formatISTTime(new Date(), false))
       loadMeetings()
       showToast('Synced with Google Calendar API & Microsoft Exchange (0 conflicts found)', 'info')
     }, 800)
+  }
+
+  const handleOpenScheduleModal = () => {
+    if (!scheduledAt) {
+      const nextHour = new Date(Date.now() + 60 * 60 * 1000)
+      nextHour.setMinutes(0, 0, 0)
+      setScheduledAt(toISTInputValue(nextHour))
+    }
+    setShowScheduleModal(true)
+  }
+
+  const isMeetingDone = (m: MeetingItem) => {
+    if (m.status === 'completed' || m.status === 'cancelled') return true
+    const startMs = new Date(m.scheduled_at).getTime()
+    const endMs = startMs + (m.duration_minutes || 30) * 60 * 1000
+    return endMs < Date.now()
+  }
+
+  const handleMeetingClick = (m: MeetingItem) => {
+    if (isMeetingDone(m)) {
+      handleOpenNotes(m)
+    } else {
+      setSelectedUpcomingMeeting(m)
+    }
   }
 
   // Live Collision Checking for Schedule Modal
@@ -180,7 +212,7 @@ export function MeetingsPage() {
       setCheckingCollision(true)
       try {
         const res = await meetingsApi.checkAvailability({
-          scheduled_at: new Date(scheduledAt).toISOString(),
+          scheduled_at: fromISTInputValue(scheduledAt),
           duration_minutes: parseInt(duration, 10) || 30,
           attendee_ids: selectedAttendeeIds,
         })
@@ -212,7 +244,7 @@ export function MeetingsPage() {
       setCheckingDeclineCollision(true)
       try {
         const res = await meetingsApi.checkAvailability({
-          scheduled_at: new Date(proposedTime).toISOString(),
+          scheduled_at: fromISTInputValue(proposedTime),
           duration_minutes: declineModalMeeting.duration_minutes,
           attendee_ids: declineModalMeeting.attendee_ids,
           exclude_meeting_id: declineModalMeeting.id,
@@ -283,7 +315,7 @@ export function MeetingsPage() {
       await meetingsApi.createMeeting({
         title: title.trim(),
         type,
-        scheduled_at: new Date(scheduledAt).toISOString(),
+        scheduled_at: fromISTInputValue(scheduledAt),
         duration_minutes: parseInt(duration, 10) || 30,
         attendee_ids: selectedAttendeeIds,
         agenda,
@@ -324,12 +356,9 @@ export function MeetingsPage() {
   const handleOpenDeclineModal = (meeting: MeetingItem) => {
     setDeclineModalMeeting(meeting)
     setRejectionReason('')
-    // Default proposed time to next day or +2 hours
+    // Default proposed time to next day or +2 hours in IST
     const nextSlot = new Date(new Date(meeting.scheduled_at).getTime() + 2 * 3600000)
-    // Format to YYYY-MM-DDTHH:mm
-    const tzOffset = nextSlot.getTimezoneOffset() * 60000
-    const localIso = new Date(nextSlot.getTime() - tzOffset).toISOString().slice(0, 16)
-    setProposedTime(localIso)
+    setProposedTime(toISTInputValue(nextSlot))
     setDeclineCollisionResult(null)
   }
 
@@ -359,11 +388,11 @@ export function MeetingsPage() {
       const res = await meetingsApi.rsvpMeeting(declineModalMeeting.id, {
         action: 'reject',
         rejection_reason: rejectionReason.trim(),
-        proposed_time: new Date(proposedTime).toISOString(),
+        proposed_time: fromISTInputValue(proposedTime),
       })
 
       showToast(
-        `Meeting auto-rescheduled to ${new Date(proposedTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} without collisions! Organiser notified.`
+        `Meeting auto-rescheduled to ${formatISTTime(fromISTInputValue(proposedTime), true)} without collisions! Organiser notified.`
       )
       setMeetings((prev) => prev.map((m) => (m.id === declineModalMeeting.id ? res.meeting : m)))
       setDeclineModalMeeting(null)
@@ -420,11 +449,11 @@ export function MeetingsPage() {
   // Filtered Meetings
   const filteredMeetings = useMemo(() => {
     const now = Date.now()
-    const todayStr = new Date().toDateString()
+    const todayIST = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
 
     return userRelevantMeetings.filter((m) => {
       const meetTime = new Date(m.scheduled_at).getTime()
-      const meetDateStr = new Date(m.scheduled_at).toDateString()
+      const meetDateIST = new Date(m.scheduled_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
 
       if (filterType === 'pending_rsvp') {
         return user?.id && m.attendee_ids?.includes(user.id) && m.attendee_status?.[user.id] === 'pending'
@@ -433,7 +462,7 @@ export function MeetingsPage() {
         return meetTime >= now
       }
       if (filterType === 'today') {
-        return meetDateStr === todayStr
+        return meetDateIST === todayIST
       }
       if (filterType === 'with_notes') {
         return Boolean(m.notes && m.notes.trim().length > 0)
@@ -442,7 +471,7 @@ export function MeetingsPage() {
     })
   }, [userRelevantMeetings, filterType, user])
 
-  // Calendar Days Calculation
+  // Calendar Days Calculation (in IST)
   const calendarDays = useMemo(() => {
     const year = currentMonth.getFullYear()
     const month = currentMonth.getMonth()
@@ -463,13 +492,10 @@ export function MeetingsPage() {
     // Month days
     for (let i = 1; i <= daysInMonth; i++) {
       const d = new Date(year, month, i)
+      const dayKey = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
       const dayMeetings = userRelevantMeetings.filter((m) => {
-        const md = new Date(m.scheduled_at)
-        return (
-          md.getDate() === d.getDate() &&
-          md.getMonth() === d.getMonth() &&
-          md.getFullYear() === d.getFullYear()
-        )
+        const mdKey = new Date(m.scheduled_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+        return mdKey === dayKey
       })
       days.push({ date: d, isCurrentMonth: true, meetings: dayMeetings })
     }
@@ -485,17 +511,6 @@ export function MeetingsPage() {
 
     return days
   }, [currentMonth, userRelevantMeetings])
-
-  // Helper to format ISO to datetime-local value
-  const toLocalInputValue = (isoStr: string) => {
-    try {
-      const d = new Date(isoStr)
-      const tzOffset = d.getTimezoneOffset() * 60000
-      return new Date(d.getTime() - tzOffset).toISOString().slice(0, 16)
-    } catch {
-      return ''
-    }
-  }
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -589,7 +604,7 @@ export function MeetingsPage() {
             <Button
               size="sm"
               variant="gemini"
-              onClick={() => setShowScheduleModal(true)}
+              onClick={handleOpenScheduleModal}
               className="gap-2 text-xs h-9 px-4 rounded-xl shadow-md"
             >
               <Plus className="h-3.5 w-3.5" />
@@ -643,7 +658,6 @@ export function MeetingsPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
               {pendingInvites.map((m) => {
-                const date = new Date(m.scheduled_at)
                 return (
                   <div
                     key={m.id}
@@ -661,8 +675,7 @@ export function MeetingsPage() {
                         <div className="flex items-center gap-1.5 font-medium">
                           <Clock className="h-3.5 w-3.5 text-cyan-400" />
                           <span>
-                            {date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })} at{' '}
-                            {date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ({m.duration_minutes}m)
+                            {formatISTDate(m.scheduled_at)} at {formatISTTime(m.scheduled_at, true)} ({m.duration_minutes}m)
                           </span>
                         </div>
                         <div className="flex items-center gap-1.5 text-[var(--text-muted)] text-[11px]">
@@ -852,19 +865,47 @@ export function MeetingsPage() {
                     </div>
 
                     <div className="mt-1.5 space-y-1">
-                      {cell.meetings.slice(0, 2).map((m) => (
-                        <button
-                          key={m.id}
-                          onClick={() => handleOpenNotes(m)}
-                          className="w-full text-left truncate px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20 text-[10px] text-cyan-300 hover:bg-cyan-500/20 transition-colors"
-                        >
-                          {new Date(m.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}{' '}
-                          {m.title}
-                        </button>
-                      ))}
-                      {cell.meetings.length > 2 && (
-                        <span className="text-[9px] text-[var(--text-muted)] block">
-                          +{cell.meetings.length - 2} more
+                      {cell.meetings.slice(0, 3).map((m) => {
+                        const done = isMeetingDone(m)
+                        return (
+                          <button
+                            key={m.id}
+                            onClick={() => handleMeetingClick(m)}
+                            className={`w-full text-left truncate px-1.5 py-1 rounded text-[10px] transition-all flex items-center gap-1 font-medium ${
+                              done
+                                ? 'bg-purple-500/15 border border-purple-500/30 text-purple-300 hover:bg-purple-500/25'
+                                : 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25'
+                            }`}
+                            title={
+                              done
+                                ? `${m.title} (Completed) • Click to view transcript`
+                                : `${m.title} (Upcoming) • Click to Join Meet`
+                            }
+                          >
+                            {done ? (
+                              <FileText className="h-2.5 w-2.5 flex-shrink-0 text-purple-400" />
+                            ) : (
+                              <Video className="h-2.5 w-2.5 flex-shrink-0 text-emerald-400 animate-pulse" />
+                            )}
+                            <span className="font-mono text-[9px] opacity-80">
+                              {formatISTTime(m.scheduled_at, false)}
+                            </span>
+                            <span className="truncate">{m.title}</span>
+                            <span
+                              className={`ml-auto text-[8px] font-bold uppercase px-1 py-0.2 rounded flex-shrink-0 ${
+                                done
+                                  ? 'bg-purple-900/60 text-purple-200'
+                                  : 'bg-emerald-900/60 text-emerald-200'
+                              }`}
+                            >
+                              {done ? 'Notes' : 'Join'}
+                            </span>
+                          </button>
+                        )
+                      })}
+                      {cell.meetings.length > 3 && (
+                        <span className="text-[9px] text-[var(--text-muted)] block pl-1">
+                          +{cell.meetings.length - 3} more
                         </span>
                       )}
                     </div>
@@ -891,7 +932,7 @@ export function MeetingsPage() {
                 <Button
                   size="sm"
                   variant="gemini"
-                  onClick={() => setShowScheduleModal(true)}
+                  onClick={handleOpenScheduleModal}
                   className="mt-4 text-xs h-8 px-3"
                 >
                   <Plus className="h-3 w-3 mr-1" /> Schedule Call
@@ -959,8 +1000,7 @@ export function MeetingsPage() {
                           <div className="flex items-center gap-4 text-xs text-[var(--text-muted)] mt-1.5 flex-wrap">
                             <span className="flex items-center gap-1.5 font-medium text-[var(--text-secondary)]">
                               <Clock className="h-3.5 w-3.5 text-cyan-400" />
-                              {date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })} at{' '}
-                              {date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ({m.duration_minutes}m)
+                              {formatISTDate(m.scheduled_at)} at {formatISTTime(m.scheduled_at, true)} ({m.duration_minutes}m)
                             </span>
                             <span className="flex items-center gap-1 text-[var(--text-muted)]">
                               <Crown className="h-3 w-3 text-amber-400" />
@@ -1186,17 +1226,19 @@ export function MeetingsPage() {
                     {declineCollisionResult.suggested_slots && declineCollisionResult.suggested_slots.length > 0 && (
                       <div className="pt-1">
                         <span className="text-[10px] uppercase font-bold text-rose-400 block mb-1">
-                          Available Conflict-Free Alternative Slots:
+                          Available Conflict-Free Alternative Slots (IST):
                         </span>
                         <div className="flex items-center gap-1.5 flex-wrap">
                           {declineCollisionResult.suggested_slots.map((slot, idx) => (
                             <button
                               key={idx}
                               type="button"
-                              onClick={() => setProposedTime(toLocalInputValue(slot))}
-                              className="px-2 py-1 rounded-md bg-rose-950/40 border border-rose-500/40 text-[10px] text-rose-200 hover:bg-rose-500/20 transition-all font-mono"
+                              onClick={() => setProposedTime(toISTInputValue(slot))}
+                              className="px-2.5 py-1 rounded-md bg-rose-950/40 border border-rose-500/40 text-[10px] text-rose-200 hover:bg-rose-500/20 transition-all font-mono flex items-center gap-1"
                             >
-                              {new Date(slot).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ({new Date(slot).toLocaleDateString([], { month: 'short', day: 'numeric' })})
+                              <Clock className="h-3 w-3 text-rose-400" />
+                              <span>{formatISTTime(slot, true)}</span>
+                              <span className="opacity-75">({formatISTDate(slot)})</span>
                             </button>
                           ))}
                         </div>
@@ -1400,17 +1442,19 @@ export function MeetingsPage() {
                     {collisionResult.suggested_slots && collisionResult.suggested_slots.length > 0 && (
                       <div className="pt-1">
                         <span className="text-[10px] uppercase font-bold text-rose-400 block mb-1">
-                          Suggested Free Alternative Slots:
+                          Suggested Free Alternative Slots (IST):
                         </span>
                         <div className="flex items-center gap-1.5 flex-wrap">
                           {collisionResult.suggested_slots.map((slot, idx) => (
                             <button
                               key={idx}
                               type="button"
-                              onClick={() => setScheduledAt(toLocalInputValue(slot))}
-                              className="px-2 py-1 rounded-md bg-rose-950/40 border border-rose-500/40 text-[10px] text-rose-200 hover:bg-rose-500/20 transition-all font-mono"
+                              onClick={() => setScheduledAt(toISTInputValue(slot))}
+                              className="px-2.5 py-1 rounded-md bg-rose-950/40 border border-rose-500/40 text-[10px] text-rose-200 hover:bg-rose-500/20 transition-all font-mono flex items-center gap-1"
                             >
-                              {new Date(slot).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ({new Date(slot).toLocaleDateString([], { month: 'short', day: 'numeric' })})
+                              <Clock className="h-3 w-3 text-rose-400" />
+                              <span>{formatISTTime(slot, true)}</span>
+                              <span className="opacity-75">({formatISTDate(slot)})</span>
                             </button>
                           ))}
                         </div>
@@ -1492,7 +1536,7 @@ export function MeetingsPage() {
                       <div className="flex items-center justify-between">
                         <span className="font-bold text-[var(--text-primary)]">{n.title}</span>
                         <span className="text-[10px] text-[var(--text-muted)]">
-                          {new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {formatISTTime(n.created_at, true)}
                         </span>
                       </div>
                       <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">{n.body}</p>
@@ -1528,7 +1572,7 @@ export function MeetingsPage() {
                       </Badge>
                     </h2>
                     <p className="text-xs text-[var(--text-muted)]">
-                      {selectedMeetingNotes.title} • {new Date(selectedMeetingNotes.scheduled_at).toLocaleDateString()}
+                      {selectedMeetingNotes.title} • {formatISTDateTime(selectedMeetingNotes.scheduled_at)}
                     </p>
                   </div>
                 </div>
@@ -1619,6 +1663,202 @@ export function MeetingsPage() {
                     className="text-xs h-8 px-4"
                   >
                     Save Notes
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* ─── MODAL: UPCOMING MEETING DETAILS & JOIN MEET ──────────────── */}
+        {selectedUpcomingMeeting && (
+          <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <Card className="w-full max-w-lg bg-[var(--bg-surface)] border-[var(--border-default)] shadow-2xl overflow-hidden rounded-2xl animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+              {/* Header */}
+              <div className="p-5 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-emerald-500/20 to-cyan-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 flex-shrink-0">
+                    <Video className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h2 className="text-base font-bold text-[var(--text-primary)]">
+                        {selectedUpcomingMeeting.title}
+                      </h2>
+                      <Badge variant="cyan" size="sm">
+                        Upcoming Call
+                      </Badge>
+                      <Badge variant="indigo" size="sm" className="capitalize">
+                        {selectedUpcomingMeeting.type || 'General'}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-[var(--text-muted)] mt-0.5 flex items-center gap-1.5">
+                      <Clock className="h-3.5 w-3.5 text-cyan-400" />
+                      <span>{formatISTDateTime(selectedUpcomingMeeting.scheduled_at)} ({selectedUpcomingMeeting.duration_minutes}m)</span>
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedUpcomingMeeting(null)}
+                  className="text-zinc-400 hover:text-white transition-colors"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="p-6 overflow-y-auto space-y-5 flex-1">
+                {/* Highlight Action Card: Join the Meet */}
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-950/40 via-teal-950/30 to-cyan-950/40 border border-emerald-500/30 shadow-inner space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-emerald-400">
+                      <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
+                      Live Google Meet Room Ready
+                    </div>
+                    <span className="text-[10px] text-emerald-300 font-mono">
+                      TLS 1.3 Encrypted
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 pt-1">
+                    <Button
+                      size="lg"
+                      variant="gemini"
+                      onClick={() => {
+                        const m = selectedUpcomingMeeting
+                        setSelectedUpcomingMeeting(null)
+                        setActiveCallMeeting(m)
+                      }}
+                      className="flex-1 text-sm h-11 px-5 gap-2 shadow-lg bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-semibold rounded-xl"
+                    >
+                      <Video className="h-4.5 w-4.5" />
+                      Join the Meet
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => {
+                        const meetUrl = selectedUpcomingMeeting.meet_link || `https://meet.google.com/hyp-${selectedUpcomingMeeting.id.slice(-6)}`
+                        navigator.clipboard.writeText(meetUrl)
+                        showToast('Meet link copied to clipboard!')
+                      }}
+                      className="h-11 px-3.5 text-xs rounded-xl border-emerald-500/30 hover:border-emerald-500/50 gap-1.5"
+                      title="Copy meeting link"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      Copy Link
+                    </Button>
+                  </div>
+
+                  <p className="text-[11px] font-mono text-emerald-200/70 truncate pt-0.5">
+                    Link: {selectedUpcomingMeeting.meet_link || `https://meet.google.com/hyp-${selectedUpcomingMeeting.id.slice(-6)}`}
+                  </p>
+                </div>
+
+                {/* Organizer & Attendees */}
+                <div className="p-3.5 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-[var(--text-muted)] flex items-center gap-1.5">
+                      <Crown className="h-3.5 w-3.5 text-amber-400" /> Organiser:
+                    </span>
+                    <span className="font-semibold text-[var(--text-primary)]">
+                      {selectedUpcomingMeeting.organiser_name || selectedUpcomingMeeting.organiser_id}
+                    </span>
+                  </div>
+
+                  <div className="pt-2 border-t border-[var(--border-subtle)]">
+                    <span className="text-[11px] font-semibold text-[var(--text-muted)] flex items-center gap-1.5 mb-2">
+                      <Users className="h-3.5 w-3.5" /> Participants &amp; RSVP:
+                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {selectedUpcomingMeeting.attendee_ids && selectedUpcomingMeeting.attendee_ids.length > 0 ? (
+                        selectedUpcomingMeeting.attendee_ids.map((aid) => {
+                          const name = selectedUpcomingMeeting.attendee_names?.[aid] || aid
+                          const rsvpStatus = selectedUpcomingMeeting.attendee_status?.[aid] || 'pending'
+                          return (
+                            <span
+                              key={aid}
+                              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-medium border ${
+                                rsvpStatus === 'accepted'
+                                  ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                                  : rsvpStatus === 'rejected'
+                                  ? 'bg-rose-500/10 text-rose-300 border-rose-500/30'
+                                  : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                              }`}
+                            >
+                              <span
+                                className={`h-1.5 w-1.5 rounded-full ${
+                                  rsvpStatus === 'accepted'
+                                    ? 'bg-emerald-400'
+                                    : rsvpStatus === 'rejected'
+                                    ? 'bg-rose-400'
+                                    : 'bg-amber-400 animate-pulse'
+                                }`}
+                              />
+                              <span>{name}</span>
+                              <span className="opacity-70 text-[9px] capitalize">({rsvpStatus})</span>
+                            </span>
+                          )
+                        })
+                      ) : (
+                        <span className="text-xs text-[var(--text-muted)]">Open Team Meeting</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Agenda */}
+                {selectedUpcomingMeeting.agenda && selectedUpcomingMeeting.agenda.length > 0 && (
+                  <div className="space-y-1.5">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                      Meeting Agenda
+                    </span>
+                    <div className="p-3 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] space-y-1.5">
+                      {selectedUpcomingMeeting.agenda.map((topic, i) => (
+                        <div key={i} className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                          <CheckCircle2 className="h-3 w-3 text-cyan-400 flex-shrink-0" />
+                          <span>{topic}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="p-4 border-t border-[var(--border-subtle)] bg-[var(--bg-surface)] flex items-center justify-between">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => handleExportIcs(selectedUpcomingMeeting)}
+                  className="gap-1.5 text-xs h-8"
+                >
+                  <Download className="h-3 w-3 text-indigo-400" />
+                  Export .ics
+                </Button>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedUpcomingMeeting(null)}
+                    className="text-xs h-8"
+                  >
+                    Close
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="gemini"
+                    onClick={() => {
+                      const m = selectedUpcomingMeeting
+                      setSelectedUpcomingMeeting(null)
+                      setActiveCallMeeting(m)
+                    }}
+                    className="text-xs h-8 px-4 gap-1.5 bg-gradient-to-r from-emerald-600 to-cyan-600"
+                  >
+                    <Video className="h-3.5 w-3.5" />
+                    Join Meet
                   </Button>
                 </div>
               </div>

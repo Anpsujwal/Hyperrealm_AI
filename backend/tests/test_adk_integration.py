@@ -35,7 +35,7 @@ def test_build_hyperrealm_adk_hierarchy():
     
     assert root is not None
     assert root.name == "hyperrealm_orchestrator"
-    assert root.model == "gemini-2.5-flash"
+    assert root.model == settings.GEMINI_MODEL
     
     # Sub-agents check
     sub_agents = root.sub_agents
@@ -132,7 +132,7 @@ async def test_demo_mode_preserves_deterministic_fallback():
     )
     
     assert response.agent_name == "Knowledge Specialist Agent"
-    assert response.model_used == "gemini-2.5-flash"
+    assert response.model_used == settings.GEMINI_MODEL
     assert response.is_simulated is True
     assert len(response.response) > 50
 

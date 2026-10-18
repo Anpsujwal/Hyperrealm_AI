@@ -496,6 +496,38 @@ export const meetingsApi = {
       method: 'DELETE',
     })
   },
+
+  async getProposal(proposalId: string): Promise<any> {
+    return request<any>(`/meetings/proposals/${proposalId}`)
+  },
+
+  async confirmProposal(proposalId: string, idempotency_key?: string): Promise<{
+    success: boolean
+    meeting: MeetingItem
+    proposal: any
+    message: string
+  }> {
+    return request(`/meetings/proposals/${proposalId}/confirm`, {
+      method: 'POST',
+      body: JSON.stringify({ idempotency_key }),
+    })
+  },
+
+  async updateProposal(
+    proposalId: string,
+    data: { scheduled_at?: string; duration_minutes?: number; title?: string; description?: string }
+  ): Promise<any> {
+    return request(`/meetings/proposals/${proposalId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    })
+  },
+
+  async cancelProposal(proposalId: string): Promise<any> {
+    return request(`/meetings/proposals/${proposalId}/cancel`, {
+      method: 'POST',
+    })
+  },
 }
 
 export const learningApi = {

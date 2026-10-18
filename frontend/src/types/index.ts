@@ -64,8 +64,9 @@ export interface ProposedActionItem {
   action_type: string
   title: string
   description?: string
-  requires_approval: boolean
-  payload: Record<string, any>
+  requires_approval?: boolean
+  proposal_id?: string
+  payload?: Record<string, any>
 }
 
 export interface Message {
@@ -177,6 +178,8 @@ export interface MeetingItem {
   scheduled_at: string
   duration_minutes: number
   location?: string
+  meet_link?: string | null
+  google_event_id?: string | null
   agenda?: string[]
   notes?: string
   status?: 'pending' | 'confirmed' | 'rescheduled' | 'rejected' | 'cancelled' | string

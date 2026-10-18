@@ -512,6 +512,7 @@ class ChatOrchestratorResponse(BaseModel):
     workflow_status: Optional[str] = None
     is_simulated: bool = False
     model_used: str = "gemini-2.5-flash"
+    delegated_agents: list[str] = Field(default_factory=list)
 
 
 class ActionExecutionRequest(BaseModel):
@@ -638,6 +639,9 @@ class MeetingOut(BaseModel):
     agenda: list[str]
     notes: str
     recording_url: Optional[str]
+    meet_link: Optional[str] = None
+    google_event_id: Optional[str] = None
+    calendar_provider: Optional[str] = "local"
     status: MeetingStatus = MeetingStatus.CONFIRMED
     attendee_status: dict[str, str] = Field(default_factory=dict)
     rejection_reason: Optional[str] = None
@@ -671,6 +675,52 @@ class CalendarAvailabilityResponse(BaseModel):
     conflicts: list[MeetingConflict] = Field(default_factory=list)
     suggested_slots: list[datetime] = Field(default_factory=list)
     message: str = ""
+
+
+class MeetingProposalOut(BaseModel):
+    id: str
+    user_id: str
+    user_name: str
+    user_email: str
+    target_user_id: str
+    target_name: str
+    target_email: str
+    target_role: str
+    title: str
+    description: str = ""
+    scheduled_at: datetime
+    scheduled_at_ist: str = ""
+    duration_minutes: int = 30
+    timezone: str = "IST (UTC+05:30)"
+    calendar_status: str
+    availability_checked: bool
+    availability_note: str
+    status: str
+    meeting_id: Optional[str] = None
+    meet_link: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class MeetingProposalCreate(BaseModel):
+    target_user_id: str
+    title: str
+    description: str = ""
+    scheduled_at: datetime
+    duration_minutes: int = 30
+
+
+class MeetingProposalUpdate(BaseModel):
+    scheduled_at: Optional[datetime] = None
+    duration_minutes: Optional[int] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+
+
+class MeetingProposalConfirm(BaseModel):
+    idempotency_key: Optional[str] = None
 
 
 class MeetingRsvpRequest(BaseModel):

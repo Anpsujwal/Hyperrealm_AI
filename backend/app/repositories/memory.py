@@ -23,6 +23,7 @@ from ..models import (
     Incident,
     LearningResource,
     Meeting,
+    MeetingProposal,
     Message,
     Notification,
     OnboardingJourney,
@@ -44,6 +45,7 @@ from .base import (
     GuidelineVersionRepository,
     IncidentRepository,
     LearningRepository,
+    MeetingProposalRepository,
     MeetingRepository,
     NotificationRepository,
     OnboardingRepository,
@@ -519,4 +521,27 @@ class MemoryOnboardingRepository(OnboardingRepository):
 
     async def list_by_manager(self, manager_id: str) -> list[OnboardingJourney]:
         return [deepcopy(j) for j in self._store.values() if j.manager_id == manager_id]
+
+
+class MemoryMeetingProposalRepository(MeetingProposalRepository):
+    def __init__(self) -> None:
+        self._store: dict[str, MeetingProposal] = {}
+
+    async def get(self, proposal_id: str) -> Optional[MeetingProposal]:
+        p = self._store.get(proposal_id)
+        return deepcopy(p) if p else None
+
+    async def list_by_user(self, user_id: str) -> list[MeetingProposal]:
+        return [deepcopy(p) for p in self._store.values() if p.user_id == user_id]
+
+    async def create(self, proposal: MeetingProposal) -> MeetingProposal:
+        self._store[proposal.id] = deepcopy(proposal)
+        return deepcopy(proposal)
+
+    async def update(self, proposal: MeetingProposal) -> MeetingProposal:
+        self._store[proposal.id] = deepcopy(proposal)
+        return deepcopy(proposal)
+
+    async def delete(self, proposal_id: str) -> bool:
+        return self._store.pop(proposal_id, None) is not None
 

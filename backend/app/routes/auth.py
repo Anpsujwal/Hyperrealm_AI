@@ -9,10 +9,11 @@ POST /auth/logout       — record logout audit event
 """
 from __future__ import annotations
 
+import logging
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import Response
 
 from ..auth import (
@@ -21,6 +22,7 @@ from ..auth import (
     hash_password,
     verify_password,
 )
+from ..config import get_settings
 from ..dependencies import AuditRepoDep, UserRepoDep
 from ..models import AuditAction, AuditRecord, UserProfile, UserRole, utcnow
 from ..schemas import (
@@ -30,6 +32,8 @@ from ..schemas import (
     UserCreate,
     UserPublic,
 )
+
+logger = logging.getLogger("hyperrealm.auth")
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -213,3 +217,75 @@ async def logout(
         description="User logged out",
     ))
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ─── Google OAuth Calendar Integration ────────────────────────────────────────
+
+@router.get("/google/callback", summary="Google OAuth 2.0 callback for Calendar & Meet")
+async def google_oauth_callback(
+    request: Request,
+    user_repo: UserRepoDep,
+    audit_repo: AuditRepoDep,
+    code: Optional[str] = Query(None),
+    state: Optional[str] = Query(None),
+    error: Optional[str] = Query(None),
+):
+    """Handle Google OAuth callback and link Calendar credentials to user account."""
+    from fastapi.responses import HTMLResponse, RedirectResponse
+    from ..services.calendar_service import get_calendar_service, CalendarError
+
+    if error:
+        logger.warning("Google OAuth error callback received: %s", error)
+        return HTMLResponse(
+            f"<h3>Google Calendar Authorization Cancelled</h3><p>Google returned error: {error}</p>"
+            f"<p><a href='/app/meetings'>Return to Meetings</a></p>",
+            status_code=400,
+        )
+
+    if not code:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing authorization code.")
+
+    # Parse state
+    user_id = None
+    if state and "uid:" in state:
+        for part in state.split("|"):
+            if part.startswith("uid:"):
+                user_id = part.replace("uid:", "")
+                break
+
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid state parameter in OAuth callback.")
+
+    user = await user_repo.get(user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found for OAuth linking.")
+
+    calendar_service = get_calendar_service()
+    try:
+        token_data = await calendar_service.exchange_code_for_token(code)
+        if not hasattr(user, "oauth_tokens") or user.oauth_tokens is None:
+            user.oauth_tokens = {}
+        user.oauth_tokens["google_calendar"] = token_data
+        await user_repo.update(user)
+
+        await audit_repo.create(AuditRecord(
+            actor_id=user.id,
+            actor_email=user.email,
+            action=AuditAction.UPDATE,
+            resource_type="user",
+            resource_id=user.id,
+            description="Linked Google Calendar OAuth token",
+        ))
+
+        settings = get_settings()
+        frontend_meetings_url = f"{settings.CORS_ORIGINS[0]}/app/meetings?calendar_connected=true"
+        return HTMLResponse(
+            f"<html><head><meta http-equiv='refresh' content='1;url={frontend_meetings_url}'></head>"
+            f"<body><h3>Google Calendar successfully connected!</h3>"
+            f"<p>Redirecting to <a href='{frontend_meetings_url}'>Meetings</a>...</p></body></html>"
+        )
+    except CalendarError as c_err:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(c_err))
+    except Exception as exc:
+        logger.exception("OAuth callback processing failed: %s", exc)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to complete Google OAuth.")

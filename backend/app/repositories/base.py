@@ -22,6 +22,7 @@ from ..models import (
     Incident,
     LearningResource,
     Meeting,
+    MeetingProposal,
     Message,
     Notification,
     OnboardingJourney,
@@ -252,4 +253,17 @@ class OnboardingRepository(ABC):
     async def update(self, journey: OnboardingJourney) -> OnboardingJourney: ...
     @abstractmethod
     async def list_by_manager(self, manager_id: str) -> list[OnboardingJourney]: ...
+
+
+class MeetingProposalRepository(ABC):
+    @abstractmethod
+    async def get(self, proposal_id: str) -> Optional[MeetingProposal]: ...
+    @abstractmethod
+    async def list_by_user(self, user_id: str) -> list[MeetingProposal]: ...
+    @abstractmethod
+    async def create(self, proposal: MeetingProposal) -> MeetingProposal: ...
+    @abstractmethod
+    async def update(self, proposal: MeetingProposal) -> MeetingProposal: ...
+    @abstractmethod
+    async def delete(self, proposal_id: str) -> bool: ...
 

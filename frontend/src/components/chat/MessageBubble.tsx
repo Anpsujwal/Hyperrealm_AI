@@ -6,6 +6,7 @@ import { TypingIndicator } from '@/components/ui/Feedback'
 import { Sparkles, Copy, Check, ThumbsUp, ThumbsDown, BookOpen, ChevronDown, ChevronUp } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { MarkdownContent } from './MarkdownContent'
+import { MeetingProposalCard } from './MeetingProposalCard'
 
 interface MessageBubbleProps {
   message: Message
@@ -72,6 +73,11 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-rose-500/10 dark:bg-none dark:bg-zinc-800 border border-purple-500/20 dark:border-zinc-700 text-purple-600 dark:text-zinc-300 font-semibold">
               Gemini 3.8 Flash
             </span>
+            {message.delegatedAgents && message.delegatedAgents.length > 1 && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/15 border border-purple-500/30 text-purple-300 font-semibold flex items-center gap-1">
+                ⚡ Multi-Agent ({message.delegatedAgents.join(' → ')})
+              </span>
+            )}
           </div>
         )}
 
@@ -167,29 +173,39 @@ export function MessageBubble({ message }: MessageBubbleProps) {
               Proposed Actions ({message.proposedActions.length})
             </span>
             <div className="grid gap-2">
-              {message.proposedActions.map((act, idx) => (
-                <div
-                  key={idx}
-                  className="p-3 rounded-xl bg-purple-500/8 border border-purple-500/25 text-xs shadow-xs"
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-semibold text-[var(--text-primary)]">{act.title}</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-400 uppercase font-bold">
-                      {act.action_type}
-                    </span>
-                  </div>
-                  {act.description && (
-                    <p className="text-[11px] text-[var(--text-secondary)] mb-2 leading-relaxed">{act.description}</p>
-                  )}
-                  {act.requires_approval ? (
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-medium text-amber-400 bg-amber-500/15 px-2.5 py-0.5 rounded-full border border-amber-500/25">
-                        Requires Lead / Admin Sign-off
+              {message.proposedActions.map((act, idx) =>
+                act.action_type === 'schedule_meeting_proposal' ? (
+                  <MeetingProposalCard
+                    key={idx}
+                    proposalId={act.proposal_id}
+                    payload={act.payload}
+                    title={act.title}
+                    description={act.description}
+                  />
+                ) : (
+                  <div
+                    key={idx}
+                    className="p-3 rounded-xl bg-purple-500/8 border border-purple-500/25 text-xs shadow-xs"
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-semibold text-[var(--text-primary)]">{act.title}</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-400 uppercase font-bold">
+                        {act.action_type}
                       </span>
                     </div>
-                  ) : null}
-                </div>
-              ))}
+                    {act.description && (
+                      <p className="text-[11px] text-[var(--text-secondary)] mb-2 leading-relaxed">{act.description}</p>
+                    )}
+                    {act.requires_approval ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-medium text-amber-400 bg-amber-500/15 px-2.5 py-0.5 rounded-full border border-amber-500/25">
+                          Requires Lead / Admin Sign-off
+                        </span>
+                      </div>
+                    ) : null}
+                  </div>
+                )
+              )}
             </div>
           </div>
         )}

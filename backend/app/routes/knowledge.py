@@ -6,11 +6,13 @@ from __future__ import annotations
 
 import base64
 import difflib
+import logging
 import os
 from typing import Optional
 
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Depends,
     File,
     Form,
@@ -23,6 +25,7 @@ from fastapi import (
 from fastapi.responses import Response
 
 from ..auth import AdminOnly, AdminRequired, CurrentUser, LeadOrAbove
+from ..config import get_settings
 from ..dependencies import (
     ActionExecutionRepoDep,
     AuditRepoDep,
@@ -69,7 +72,11 @@ from ..schemas import (
 )
 from ..services.ingestion import DocumentIngestionService
 from ..services.retrieval import EnterpriseRetrievalService
+from ..services.storage import get_storage_service
+from ..services.vertex_search import VertexAISearchService
 from ..services.vision import BrandComplianceService
+
+logger = logging.getLogger("hyperrealm.knowledge")
 
 router = APIRouter(tags=["knowledge"])
 
@@ -253,12 +260,21 @@ async def delete_document(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
                             detail="Only the author or an admin may delete this document")
 
-    # Clean up physical file on disk if it exists
-    if doc.file_path and os.path.exists(doc.file_path):
+    # Clean up physical file in configured storage adapter
+    if doc.file_path:
         try:
-            os.remove(doc.file_path)
-        except OSError:
-            pass
+            storage = get_storage_service()
+            await storage.delete_file(doc.file_path)
+        except Exception as e:
+            logger.warning("Failed deleting storage file %s: %s", doc.file_path, e)
+
+    # Clean up from Vertex AI Search if configured
+    try:
+        vertex_search = VertexAISearchService()
+        if vertex_search.is_configured():
+            await vertex_search.delete_document(doc.file_path or doc_id)
+    except Exception as e:
+        logger.warning("Failed deleting document %s from Vertex AI Search: %s", doc_id, e)
 
     await doc_repo.delete(doc_id)
     await audit_repo.create(AuditRecord(
@@ -286,7 +302,7 @@ async def summarize_document(
     agent = KnowledgeAgent(get_retrieval())
     try:
         res = await agent.summarize_document(doc_id, current_user)
-        if res.get("visual_elements_detected") is None:
+        if not isinstance(res.get("visual_elements_detected"), list):
             res["visual_elements_detected"] = []
         if res.get("key_points") is None:
             res["key_points"] = []
@@ -297,10 +313,12 @@ async def summarize_document(
         if res.get("citations") is None:
             res["citations"] = []
         return DocumentSummaryResponse(**res)
-    except ValueError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
     except PermissionError:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    except ValueError as e:
+        if "not found" in str(e).lower():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+        raise
 
 
 @router.post("/documents/{doc_id}/query", response_model=DocumentQueryResponse,
@@ -489,12 +507,20 @@ async def upload_official_guideline_file(
     status_val: str = Form("published"),
     _: UserProfile = AdminOnly,
 ) -> GuidelineOut:
-    """Only administrators can upload files to create official authoritative policies."""
     content_bytes = await file.read()
-    try:
-        content_text = content_bytes.decode("utf-8")
-    except UnicodeDecodeError:
-        content_text = f"Uploaded official guideline document: {file.filename}\nSize: {len(content_bytes)} bytes"
+    ext = file.filename.rsplit(".", 1)[-1].lower() if file.filename and "." in file.filename else ""
+    ingestion = get_ingestion()
+    if ext == "pdf":
+        content_text, _, _ = ingestion._parse_pdf(content_bytes, file.filename or "official_guideline.pdf")
+    elif ext in ("txt", "md", "json", "log", "csv"):
+        content_text = ingestion._parse_plaintext(content_bytes)
+    elif ext == "docx":
+        content_text, _, _ = ingestion._parse_docx(content_bytes)
+    else:
+        try:
+            content_text = content_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            content_text = f"Uploaded official guideline document: {file.filename}\nSize: {len(content_bytes)} bytes"
 
     clean_title = title or (file.filename or "Official Guideline").replace(".md", "").replace(".txt", "").replace(".pdf", "").title()
     tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else ["official", category]
@@ -960,3 +986,34 @@ async def get_guideline_diff(
         unified_diff=unified_diff,
         side_by_side=side_by_side,
     )
+
+
+@router.post("/documents/{doc_id}/retry-indexing", response_model=DocumentOut,
+             summary="Retry indexing for a failed or pending document")
+@router.post("/personal/documents/{doc_id}/retry-indexing", response_model=DocumentOut,
+             summary="Retry indexing for a personal document")
+async def retry_indexing_document(
+    doc_id: str,
+    current_user: UserProfile = CurrentUser,
+    doc_repo: DocRepoDep = None,
+) -> DocumentOut:
+    """Manually retry document processing and Vertex AI Search indexing."""
+    ingestion = get_ingestion()
+    try:
+        updated_doc = await ingestion.reindex_document(doc_id, user=current_user, doc_repo=doc_repo)
+        return DocumentOut.model_validate(updated_doc)
+    except Exception as e:
+        logger.exception("Failed to retry indexing for %s: %s", doc_id, e)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/admin/backfill-indexing", summary="Backfill unindexed GCS objects into repository (Admin)")
+async def backfill_indexing(
+    current_user: UserProfile = AdminOnly,
+    doc_repo: DocRepoDep = None,
+):
+    """Scan configured Cloud Storage bucket and index any unindexed documents."""
+    ingestion = get_ingestion()
+    result = await ingestion.backfill_gcs_objects(doc_repo=doc_repo)
+    return result
+

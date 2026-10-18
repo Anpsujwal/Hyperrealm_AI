@@ -1,0 +1,1 @@
+Payment checkout flow handles tokenization and 3D Secure verification.

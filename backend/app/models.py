@@ -205,6 +205,7 @@ class UserProfile(BaseModel):
     hashed_password: Optional[str] = None
     skills: list[str] = Field(default_factory=list)
     project_ids: list[str] = Field(default_factory=list)
+    oauth_tokens: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=utcnow)
     last_login_at: Optional[datetime] = None
 
@@ -409,12 +410,41 @@ class Meeting(BaseModel):
     agenda: list[str] = Field(default_factory=list)
     notes: str = ""
     recording_url: Optional[str] = None
+    meet_link: Optional[str] = None
+    google_event_id: Optional[str] = None
+    calendar_provider: str = "local"
     status: MeetingStatus = MeetingStatus.CONFIRMED
     attendee_status: dict[str, str] = Field(default_factory=dict)
     rejection_reason: Optional[str] = None
     proposed_time: Optional[datetime] = None
     rescheduled_by: Optional[str] = None
     reschedule_history: list[dict[str, Any]] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+    model_config = {"from_attributes": True}
+
+
+class MeetingProposal(BaseModel):
+    id: str = Field(default_factory=lambda: new_id("prop_"))
+    user_id: str
+    user_name: str
+    user_email: str
+    target_user_id: str
+    target_name: str
+    target_email: str
+    target_role: str = "Subject-Matter Expert"
+    title: str
+    description: str = ""
+    scheduled_at: datetime
+    duration_minutes: int = 30
+    timezone: str = "IST (UTC+05:30)"
+    calendar_status: str = "local"
+    availability_checked: bool = True
+    availability_note: str = "Availability checked. No collisions detected."
+    status: str = "pending_confirmation"  # "pending_confirmation" | "confirmed" | "cancelled" | "expired"
+    meeting_id: Optional[str] = None
+    meet_link: Optional[str] = None
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 

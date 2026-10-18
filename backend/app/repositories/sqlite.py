@@ -22,6 +22,7 @@ from .base import (
     GuidelineVersionRepository,
     IncidentRepository,
     LearningRepository,
+    MeetingProposalRepository,
     MeetingRepository,
     NotificationRepository,
     OnboardingRepository,
@@ -42,6 +43,7 @@ from ..models import (
     Incident,
     LearningResource,
     Meeting,
+    MeetingProposal,
     Message,
     Notification,
     OnboardingJourney,
@@ -62,7 +64,8 @@ def _get_connection(db_path: str) -> sqlite3.Connection:
 
 def init_sqlite_db(db_path: str) -> None:
     """Create tables and indexes if they do not exist."""
-    with _get_connection(db_path) as conn:
+    conn = _get_connection(db_path)
+    try:
         conn.executescript("""
         CREATE TABLE IF NOT EXISTS users (
             id TEXT PRIMARY KEY,
@@ -232,14 +235,26 @@ def init_sqlite_db(db_path: str) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_onb_user ON onboarding_journeys(user_id);
         CREATE INDEX IF NOT EXISTS idx_onb_manager ON onboarding_journeys(manager_id);
+
+        CREATE TABLE IF NOT EXISTS meeting_proposals (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            status TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            data JSON NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_proposals_user ON meeting_proposals(user_id);
         """)
         conn.commit()
+    finally:
+        conn.close()
 
 
 # ─── Helper function ──────────────────────────────────────────────────────────
 
 def _sync_query(db_path: str, sql: str, params: tuple = (), fetch: str = "none") -> Any:
-    with _get_connection(db_path) as conn:
+    conn = _get_connection(db_path)
+    try:
         cur = conn.cursor()
         cur.execute(sql, params)
         if fetch == "one":
@@ -252,6 +267,8 @@ def _sync_query(db_path: str, sql: str, params: tuple = (), fetch: str = "none")
             return row[0] if row else 0
         conn.commit()
         return None
+    finally:
+        conn.close()
 
 
 # ─── Repositories ─────────────────────────────────────────────────────────────
@@ -520,7 +537,7 @@ class SqliteConversationRepository(ConversationRepository):
         await asyncio.to_thread(
             _sync_query,
             self.db_path,
-            "INSERT INTO messages (id, conversation_id, created_at, data) VALUES (?, ?, ?, ?)",
+            "INSERT OR REPLACE INTO messages (id, conversation_id, created_at, data) VALUES (?, ?, ?, ?)",
             (message.id, message.conversation_id, message.created_at.isoformat(), message.model_dump_json()),
         )
         return message
@@ -1036,7 +1053,7 @@ class SqliteAuditRepository(AuditRepository):
         await asyncio.to_thread(
             _sync_query,
             self.db_path,
-            "INSERT INTO audit_records (id, actor_id, created_at, data) VALUES (?, ?, ?, ?)",
+            "INSERT OR REPLACE INTO audit_records (id, actor_id, created_at, data) VALUES (?, ?, ?, ?)",
             (record.id, record.actor_id, record.created_at.isoformat(), record.model_dump_json()),
         )
         return record
@@ -1252,4 +1269,56 @@ class SqliteOnboardingRepository(OnboardingRepository):
             "all",
         )
         return [OnboardingJourney.model_validate_json(r["data"]) for r in rows]
+
+
+class SqliteMeetingProposalRepository(MeetingProposalRepository):
+    def __init__(self, db_path: str):
+        self.db_path = db_path
+
+    async def get(self, proposal_id: str) -> Optional[MeetingProposal]:
+        row = await asyncio.to_thread(
+            _sync_query,
+            self.db_path,
+            "SELECT data FROM meeting_proposals WHERE id = ?",
+            (proposal_id,),
+            "one",
+        )
+        return MeetingProposal.model_validate_json(row["data"]) if row else None
+
+    async def list_by_user(self, user_id: str) -> list[MeetingProposal]:
+        rows = await asyncio.to_thread(
+            _sync_query,
+            self.db_path,
+            "SELECT data FROM meeting_proposals WHERE user_id = ? ORDER BY created_at DESC",
+            (user_id,),
+            "all",
+        )
+        return [MeetingProposal.model_validate_json(r["data"]) for r in rows]
+
+    async def create(self, proposal: MeetingProposal) -> MeetingProposal:
+        await asyncio.to_thread(
+            _sync_query,
+            self.db_path,
+            "INSERT OR REPLACE INTO meeting_proposals (id, user_id, status, created_at, data) VALUES (?, ?, ?, ?, ?)",
+            (proposal.id, proposal.user_id, proposal.status, proposal.created_at.isoformat(), proposal.model_dump_json()),
+        )
+        return proposal
+
+    async def update(self, proposal: MeetingProposal) -> MeetingProposal:
+        await asyncio.to_thread(
+            _sync_query,
+            self.db_path,
+            "UPDATE meeting_proposals SET status = ?, data = ? WHERE id = ?",
+            (proposal.status, proposal.model_dump_json(), proposal.id),
+        )
+        return proposal
+
+    async def delete(self, proposal_id: str) -> bool:
+        await asyncio.to_thread(
+            _sync_query,
+            self.db_path,
+            "DELETE FROM meeting_proposals WHERE id = ?",
+            (proposal_id,),
+        )
+        return True
 

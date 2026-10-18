@@ -16,8 +16,8 @@ logger = logging.getLogger("hyperrealm.agents.adk")
 
 # ─── Safe Import Guards for Google Cloud & ADK SDKs ──────────────────────────
 try:
-    from google.adk.agents import LlmAgent
-    from google.adk.runners import InMemoryRunner
+    from google.adk.agents import LlmAgent  # type: ignore[import-not-found]  # pyright: ignore[reportMissingImports]
+    from google.adk.runners import InMemoryRunner  # type: ignore[import-not-found]  # pyright: ignore[reportMissingImports]
     HAS_GOOGLE_ADK = True
 except ImportError:
     LlmAgent = None  # type: ignore[assignment,misc]
@@ -26,7 +26,7 @@ except ImportError:
     logger.info("google-adk package not imported; running in fallback mode.")
 
 try:
-    from google import genai
+    from google import genai  # type: ignore[import-not-found]  # pyright: ignore[reportMissingImports]
     HAS_GOOGLE_GENAI = True
 except ImportError:
     genai = None  # type: ignore[assignment]
@@ -196,11 +196,64 @@ def get_adk_runner(model_name: Optional[str] = None) -> Optional[Any]:
 
 # ─── Live Vertex AI / Gemini Client Provider ─────────────────────────────────
 
+# ─── Live Vertex AI / Gemini Client Provider & Error Mapping ─────────────────
+
+class GeminiInvocationError(Exception):
+    """Structured error for Gemini / Vertex AI failures with human-readable diagnostic messages."""
+    def __init__(
+        self,
+        message: str,
+        error_type: str = "general",
+        status_code: int = 500,
+        original_error: Optional[Exception] = None,
+        error_code: Optional[str] = None,
+    ):
+        super().__init__(message)
+        self.message = message
+        self.error_type = error_type
+        self.status_code = status_code
+        self.original_error = original_error
+        self.error_code = error_code or error_type.upper()
+
+    @classmethod
+    def from_exception(cls, exc: Exception, model_name: str = "gemini-3.8-flash") -> GeminiInvocationError:
+        return _map_gemini_exception(exc, model_name)
+
+
+def get_gemini_runtime_status() -> dict[str, Any]:
+    """Return explicit verification status of the Gemini / Vertex AI runtime."""
+    settings = get_settings()
+    has_creds = bool(
+        settings.GOOGLE_APPLICATION_CREDENTIALS
+        or os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+        or settings.GEMINI_API_KEY
+    )
+    has_proj = bool(settings.GOOGLE_CLOUD_PROJECT or settings.GCP_PROJECT_ID)
+    is_live = not settings.is_demo and ((has_proj and has_creds) or bool(settings.GEMINI_API_KEY))
+    return {
+        "is_live": is_live,
+        "model": settings.GEMINI_MODEL,
+        "fallback_model": settings.GEMINI_FALLBACK_MODEL,
+        "vertexai": settings.GOOGLE_GENAI_USE_VERTEXAI,
+        "project": settings.GOOGLE_CLOUD_PROJECT,
+        "location": settings.GOOGLE_CLOUD_LOCATION,
+        "client_type": "google_genai_sdk",
+        "status": "ready" if is_live else ("demo_mode" if settings.is_demo else "unconfigured"),
+    }
+
+
+_cached_client: Optional[Any] = None
+
+
 def get_live_genai_client() -> Optional[Any]:
     """
     Construct a live google.genai.Client targeting Vertex AI or Gemini API
     if valid credentials/keys are present and not in demo mode.
     """
+    global _cached_client
+    if _cached_client is not None:
+        return _cached_client
+
     settings = get_settings()
     if settings.is_demo:
         return None
@@ -209,21 +262,178 @@ def get_live_genai_client() -> Optional[Any]:
         return None
 
     try:
+        # Set credentials in environment if configured
+        if settings.GOOGLE_APPLICATION_CREDENTIALS and not os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = settings.GOOGLE_APPLICATION_CREDENTIALS
+
         # 1. Direct Gemini Developer API key
         if settings.GEMINI_API_KEY:
-            return genai.Client(api_key=settings.GEMINI_API_KEY)
+            _cached_client = genai.Client(api_key=settings.GEMINI_API_KEY)
+            return _cached_client
 
         # 2. Google Vertex AI via Cloud Project & ADC
         project = settings.GOOGLE_CLOUD_PROJECT or settings.GCP_PROJECT_ID
         if project:
-            location = settings.GOOGLE_CLOUD_LOCATION or "us-central1"
-            return genai.Client(vertexai=True, project=project, location=location)
+            location = settings.GOOGLE_CLOUD_LOCATION or "global"
+            _cached_client = genai.Client(vertexai=True, project=project, location=location)
+            return _cached_client
 
     except Exception as exc:
         logger.warning("Could not initialize live google.genai.Client: %s", exc)
         return None
 
     return None
+
+
+async def verify_gemini_model_availability(model_name: Optional[str] = None) -> dict[str, Any]:
+    """
+    Directly verify that the configured model ID is supported and accessible via Vertex AI.
+    Returns status dict or raises GeminiInvocationError.
+    """
+    import asyncio
+    settings = get_settings()
+    target_model = model_name or settings.GEMINI_MODEL
+    client = get_live_genai_client()
+
+    if not client:
+        return {
+            "status": "unavailable",
+            "model": target_model,
+            "message": "Live Gemini client could not be initialized (missing credentials or demo mode active).",
+            "is_live": False,
+        }
+
+    try:
+        # Run a minimal ping against the configured model
+        response = await asyncio.to_thread(
+            client.models.generate_content,
+            model=target_model,
+            contents="ping",
+        )
+        return {
+            "status": "operational",
+            "model": target_model,
+            "message": f"Successfully verified live Vertex AI connectivity for model '{target_model}'.",
+            "is_live": True,
+        }
+    except Exception as exc:
+        err = _map_gemini_exception(exc, target_model)
+        return {
+            "status": "error",
+            "model": target_model,
+            "error_type": err.error_type,
+            "message": err.message,
+            "is_live": False,
+        }
+
+
+def _map_gemini_exception(exc: Exception, model_name: str) -> GeminiInvocationError:
+    """Map Google Cloud / GenAI exceptions to clear, actionable enterprise errors."""
+    err_str = str(exc)
+    err_cls = exc.__class__.__name__
+
+    # 1. Quota / Rate Limits (429)
+    if "429" in err_str or "ResourceExhausted" in err_cls or "QUOTA_EXCEEDED" in err_str:
+        return GeminiInvocationError(
+            message=f"Gemini API rate limit or quota exceeded for model '{model_name}'. Please retry after a brief pause.",
+            error_type="quota_exceeded",
+            status_code=429,
+            original_error=exc,
+        )
+
+    # 2. Model Not Found / Unavailable (404)
+    if "404" in err_str or "NotFound" in err_cls or "was not found" in err_str:
+        return GeminiInvocationError(
+            message=(
+                f"Configured model '{model_name}' is not available in the specified Google Cloud project or location. "
+                "Verify the model ID and API availability in Google Cloud Console."
+            ),
+            error_type="model_unavailable",
+            status_code=404,
+            original_error=exc,
+        )
+
+    # 3. Permission Denied / Authorization (403)
+    if "403" in err_str or "PermissionDenied" in err_cls or "PERMISSION_DENIED" in err_str:
+        return GeminiInvocationError(
+            message=(
+                f"Insufficient Google Cloud IAM permissions to invoke Vertex AI model '{model_name}'. "
+                "Ensure the service account has 'roles/aiplatform.user' or 'Vertex AI User' role assigned."
+            ),
+            error_type="permission_denied",
+            status_code=403,
+            original_error=exc,
+        )
+
+    # 4. Invalid Credentials / Authentication (401)
+    if "401" in err_str or "Unauthenticated" in err_cls or "credentials" in err_str.lower():
+        return GeminiInvocationError(
+            message="Invalid or expired Google Cloud credentials for Vertex AI. Check GOOGLE_APPLICATION_CREDENTIALS.",
+            error_type="unauthenticated",
+            status_code=401,
+            original_error=exc,
+        )
+
+    # 5. Network Failures / Timeouts
+    if "timeout" in err_str.lower() or "connect" in err_str.lower() or "connection" in err_str.lower():
+        return GeminiInvocationError(
+            message="Network failure communicating with Google Vertex AI endpoint. Check internet connection and proxy settings.",
+            error_type="network_failure",
+            status_code=504,
+            original_error=exc,
+        )
+
+    return GeminiInvocationError(
+        message=f"Google Vertex AI invocation error: {err_str}",
+        error_type="general_error",
+        status_code=500,
+        original_error=exc,
+    )
+
+
+async def call_gemini_model(
+    prompt: str,
+    system_instruction: Optional[str] = None,
+    model_name: Optional[str] = None,
+    contents: Optional[Any] = None,
+    temperature: float = 0.2,
+) -> str:
+    """
+    Invoke real Gemini model via Vertex AI using thread execution to prevent event loop blocking.
+    Raises GeminiInvocationError on failure.
+    """
+    import asyncio
+    settings = get_settings()
+    active_model = model_name or settings.GEMINI_MODEL
+    client = get_live_genai_client()
+
+    if not client:
+        raise GeminiInvocationError(
+            "Live Gemini client is not initialized. Ensure GOOGLE_CLOUD_PROJECT and valid credentials are configured.",
+            error_type="not_initialized",
+            status_code=503,
+        )
+
+    payload = contents if contents is not None else prompt
+
+    def _sync_call():
+        config_kwargs: dict[str, Any] = {"temperature": temperature}
+        if system_instruction:
+            config_kwargs["system_instruction"] = system_instruction
+        return client.models.generate_content(
+            model=active_model,
+            contents=payload,
+            config=config_kwargs,
+        )
+
+    try:
+        response = await asyncio.to_thread(_sync_call)
+        if response and response.text:
+            return response.text.strip()
+        return ""
+    except Exception as exc:
+        logger.error("Gemini model '%s' call failed: %s", active_model, exc)
+        raise _map_gemini_exception(exc, active_model) from exc
 
 
 async def execute_live_adk_or_gemini(
@@ -240,35 +450,29 @@ async def execute_live_adk_or_gemini(
     if settings.is_demo:
         return None
 
-    client = get_live_genai_client()
-    if not client:
-        return None
+    system_instruction = (
+        f"You are the Hyperrealm AI Assistant serving employee {user.full_name} ({user.email}), "
+        f"role {user.role.value if hasattr(user.role, 'value') else user.role}. "
+        "Provide grounded enterprise responses with clear structure, actionable next steps, and verified facts."
+    )
 
-    model_name = settings.GEMINI_MODEL
     try:
-        system_instruction = (
-            f"You are the Hyperrealm AI Assistant serving employee {user.full_name} ({user.email}), "
-            f"role {user.role.value if hasattr(user.role, 'value') else user.role}. "
-            "Provide grounded enterprise responses with clear structure, actionable next steps, and verified facts."
+        text = await call_gemini_model(
+            prompt=prompt,
+            system_instruction=system_instruction,
+            model_name=settings.GEMINI_MODEL,
         )
-
-        response = await client.aio.models.generate_content(
-            model=model_name,
-            contents=prompt,
-            config=dict(
-                system_instruction=system_instruction,
-                temperature=0.2,
-            ),
-        )
-
-        if response and response.text:
+        if text:
             return {
-                "response": response.text,
-                "model_used": model_name,
+                "response": text,
+                "model_used": settings.GEMINI_MODEL,
                 "is_simulated": False,
             }
+    except GeminiInvocationError as g_err:
+        logger.warning("Live Gemini model invocation failed: %s (%s)", g_err.message, g_err.error_type)
+        return None
     except Exception as exc:
-        logger.warning("Live Gemini model invocation failed: %s; falling back to deterministic engine.", exc)
+        logger.warning("Unexpected error during live Gemini call: %s", exc)
         return None
 
     return None

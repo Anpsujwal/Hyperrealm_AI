@@ -491,11 +491,10 @@ export function KnowledgeHubPage() {
               setActiveTab('personal')
               setActiveCategory('all')
             }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              activeTab === 'personal'
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'personal'
                 ? 'bg-indigo-600 text-white shadow-sm'
                 : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-            }`}
+              }`}
           >
             <FileText className="h-4 w-4" />
             Personal Hub (My Library)
@@ -505,11 +504,10 @@ export function KnowledgeHubPage() {
               setActiveTab('official')
               setActiveCategory('all')
             }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              activeTab === 'official'
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'official'
                 ? 'bg-indigo-600 text-white shadow-sm'
                 : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-            }`}
+              }`}
           >
             <ShieldCheck className="h-4 w-4" />
             Official Guidelines
@@ -519,11 +517,10 @@ export function KnowledgeHubPage() {
               setActiveTab('audit')
               setActiveCategory('all')
             }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              activeTab === 'audit'
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'audit'
                 ? 'bg-indigo-600 text-white shadow-sm'
                 : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-            }`}
+              }`}
           >
             <Sparkles className="h-4 w-4" />
             Brand Compliance Audit
@@ -558,11 +555,10 @@ export function KnowledgeHubPage() {
                 <button
                   key={cat.id}
                   onClick={() => setActiveCategory(cat.id)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                    activeCategory === cat.id
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeCategory === cat.id
                       ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30'
                       : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-transparent hover:border-[var(--border-default)]'
-                  }`}
+                    }`}
                 >
                   {cat.label}
                 </button>
@@ -711,11 +707,10 @@ export function KnowledgeHubPage() {
                 <button
                   key={cat.id}
                   onClick={() => setActiveCategory(cat.id)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                    activeCategory === cat.id
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeCategory === cat.id
                       ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30'
                       : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-transparent hover:border-[var(--border-default)]'
-                  }`}
+                    }`}
                 >
                   {cat.label}
                 </button>
@@ -939,11 +934,10 @@ export function KnowledgeHubPage() {
                             <div className="flex items-center justify-between gap-2">
                               <span className="font-semibold text-[var(--text-primary)]">{chk.requirement}</span>
                               <span
-                                className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${
-                                  chk.result.toLowerCase() === 'passed'
+                                className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${chk.result.toLowerCase() === 'passed'
                                     ? 'bg-emerald-500/15 text-emerald-400'
                                     : 'bg-rose-500/15 text-rose-400'
-                                }`}
+                                  }`}
                               >
                                 {chk.result}
                               </span>

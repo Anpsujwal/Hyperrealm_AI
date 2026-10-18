@@ -44,3 +44,81 @@ export function getInitials(name: string): string {
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
+
+export const IST_TIMEZONE = 'Asia/Kolkata'
+
+/**
+ * Formats a date/string into Indian Standard Time (IST) 12-hour time (e.g., "06:30 PM IST")
+ */
+export function formatISTTime(date: Date | string, showLabel = true): string {
+  try {
+    const d = typeof date === 'string' ? new Date(date) : date
+    const formatted = d.toLocaleTimeString('en-IN', {
+      timeZone: IST_TIMEZONE,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    })
+    return showLabel ? `${formatted} IST` : formatted
+  } catch {
+    return String(date)
+  }
+}
+
+/**
+ * Formats a date/string into Indian Standard Time (IST) date (e.g., "Sun, Oct 18, 2026")
+ */
+export function formatISTDate(date: Date | string, options?: Intl.DateTimeFormatOptions): string {
+  try {
+    const d = typeof date === 'string' ? new Date(date) : date
+    return d.toLocaleDateString('en-IN', {
+      timeZone: IST_TIMEZONE,
+      weekday: options?.weekday ?? 'short',
+      month: options?.month ?? 'short',
+      day: options?.day ?? 'numeric',
+      year: options?.year ?? 'numeric',
+    })
+  } catch {
+    return String(date)
+  }
+}
+
+/**
+ * Formats into full date and time in IST (e.g., "Sun, Oct 18, 2026 at 06:30 PM IST")
+ */
+export function formatISTDateTime(date: Date | string): string {
+  return `${formatISTDate(date)} at ${formatISTTime(date, true)}`
+}
+
+/**
+ * Converts any ISO or Date object into a YYYY-MM-DDTHH:mm string in IST for datetime-local input
+ */
+export function toISTInputValue(date: Date | string): string {
+  try {
+    const d = typeof date === 'string' ? new Date(date) : date
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: IST_TIMEZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    })
+    const parts = formatter.formatToParts(d)
+    const getPart = (type: string) => parts.find((p) => p.type === type)?.value || '00'
+    return `${getPart('year')}-${getPart('month')}-${getPart('day')}T${getPart('hour')}:${getPart('minute')}`
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * Converts a datetime-local input string (YYYY-MM-DDTHH:mm) into an ISO string tagged with +05:30 IST
+ */
+export function fromISTInputValue(localInputStr: string): string {
+  if (!localInputStr) return ''
+  const withTz = `${localInputStr}:00+05:30`
+  return new Date(withTz).toISOString()
+}
+

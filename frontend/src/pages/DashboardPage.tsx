@@ -20,6 +20,7 @@ import {
   learningApi,
   knowledgeApi,
 } from '@/lib/api'
+import { formatISTTime } from '@/lib/utils'
 import type {
   MeetingItem,
   LearningItem,
@@ -323,10 +324,7 @@ export function DashboardPage() {
                     >
                       <div className="flex items-center gap-3 min-w-0 pr-2">
                         <div className="px-2.5 py-1.5 rounded-md bg-[var(--bg-overlay)] border border-[var(--border-subtle)] text-[11px] font-mono text-cyan-400 font-semibold whitespace-nowrap">
-                          {new Date(meeting.scheduled_at).toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
+                          {formatISTTime(meeting.scheduled_at, true)}
                         </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">

@@ -114,7 +114,9 @@ async def seed_all() -> None:
         description="Product management and business analysis",
     )
     for d in (eng_dept, prod_dept):
-        await dept_repo.create(d)
+        existing_dept = await dept_repo.get(d.id)
+        if not existing_dept:
+            await dept_repo.create(d)
 
     # ── Users ────────────────────────────────────────────────────────────────
 
@@ -197,22 +199,6 @@ async def seed_all() -> None:
         project_ids=["proj_phoenix", "proj_sentinel"],
         status=UserStatus.ACTIVE,
         created_at=_dt(-140),
-    )
-
-    ayesha = UserProfile(
-        id="usr_ayesha",
-        email="ayesha.hussain@hyperrealm.io",
-        name="Ayesha Hussain",
-        role=UserRole.QA_ENGINEER,
-        department_id="dept_engineering",
-        department_name="Engineering",
-        job_title="QA Engineer",
-        manager_id="usr_priya",
-        hashed_password=pw,
-        skills=["Python Automation", "Pytest", "API Testing", "Postman", "Defect Management"],
-        project_ids=["proj_phoenix"],
-        status=UserStatus.ACTIVE,
-        created_at=_dt(-80),
     )
 
     eve = UserProfile(
@@ -311,15 +297,22 @@ async def seed_all() -> None:
         created_at=_dt(-7),
     )
 
-    users = [alice, bob, priya, ayesha, carol, david, eve, frank, grace, henry, isabel, james]
+    users = [alice, bob, priya, carol, david, eve, frank, grace, henry, isabel, james]
     for u in users:
+        existing_user = await user_repo.get(u.id)
+        if not existing_user:
+            existing_user = await user_repo.get_by_email(u.email)
+        if existing_user:
+            continue
         await user_repo.create(u)
 
     # Update dept heads
-    eng_dept.head_user_id = "usr_alice"
-    prod_dept.head_user_id = "usr_henry"
-    await dept_repo.update(eng_dept)
-    await dept_repo.update(prod_dept)
+    eng_dept_curr = await dept_repo.get(eng_dept.id) or eng_dept
+    prod_dept_curr = await dept_repo.get(prod_dept.id) or prod_dept
+    eng_dept_curr.head_user_id = "usr_alice"
+    prod_dept_curr.head_user_id = "usr_henry"
+    await dept_repo.update(eng_dept_curr)
+    await dept_repo.update(prod_dept_curr)
 
     # ── Projects ─────────────────────────────────────────────────────────────
 

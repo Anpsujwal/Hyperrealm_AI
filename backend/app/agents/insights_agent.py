@@ -106,6 +106,7 @@ class InsightsAgent:
 
     async def _investigate_error(self, prompt: str, user: UserProfile) -> dict[str, Any]:
         """Search historical incident records & runbooks for matching resolutions."""
+        settings = get_settings()
         results, _ = await self.retrieval.search(
             query=prompt,
             user=user,
@@ -113,41 +114,58 @@ class InsightsAgent:
             top_k=3,
         )
 
-        if results:
-            match = results[0]
-            response = (
-                f"**Historical Incident Investigation**\n\n"
-                f"I identified a related historical incident: **{match.title}**\n\n"
-                f"**Historical Resolution:**\n> {match.snippet}\n\n"
-                f"**Evidence-based Troubleshooting Steps:**\n"
-                f"1. Check underlying connection pool and token cache TTL as applied in previous incident resolution.\n"
-                f"2. Validate telemetry metrics against runbook threshold SLAs.\n"
-                f"3. If recurrence persists, escalate to the assigned on-call team."
-            )
-            return {
-                "agent_id": self.name,
-                "response": response,
-                "citations": match.citations,
-            }
-        else:
-            # Evidence-based troubleshooting hypothesis
-            response = (
-                f"**Troubleshooting Hypothesis (No Direct Historical Match Found)**\n\n"
-                f"No prior incident perfectly matches this error pattern in the historical records.\n\n"
-                f"**Hypothesis:**\n"
-                f"- The failure likely originates from network timeout, token expiration, or concurrency limits.\n"
-                f"- Review active service logs for HTTP status code 401/429/504.\n"
-                f"- Verify that circuit-breaker and retry configurations align with HYPERREALM Engineering Guidelines."
-            )
-            return {
-                "agent_id": self.name,
-                "response": response,
-                "citations": [],
-            }
+        match = results[0] if results else None
+        citations = match.citations if match else []
+        response = None
+        is_sim = settings.is_demo
+
+        if not settings.is_demo:
+            try:
+                from .adk_runtime import call_gemini_model
+                sys_inst = (
+                    f"You are the Hyperrealm Insights & Troubleshooting Specialist serving engineer {user.name}. "
+                    "Analyze runtime errors and stack traces. Ground your hypothesis and troubleshooting steps "
+                    "in the provided historical incidents and runbooks."
+                )
+                incident_ctx = f"Historical Incident Context:\nTitle: {match.title}\nResolution: {match.snippet}" if match else "No exact historical incident matched in runbook."
+                live_res = await call_gemini_model(prompt=live_prompt, system_instruction=sys_inst)
+                if live_res:
+                    response = f"**Incident Investigation & Analysis**\n\n" + live_res
+                    is_sim = False
+            except Exception as exc:
+                logger.warning("Gemini error investigation failed (%s), using local response", exc)
+
+        if not response:
+            if match:
+                response = (
+                    f"**Historical Incident Investigation**\n\n"
+                    f"I identified a related historical incident: **{match.title}**\n\n"
+                    f"**Historical Resolution:**\n> {match.snippet}\n\n"
+                    f"**Evidence-based Troubleshooting Steps:**\n"
+                    f"1. Check underlying connection pool and token cache TTL as applied in previous incident resolution.\n"
+                    f"2. Validate telemetry metrics against runbook threshold SLAs.\n"
+                    f"3. If recurrence persists, escalate to the assigned on-call team."
+                )
+            else:
+                response = (
+                    f"**Troubleshooting Hypothesis (No Direct Historical Match Found)**\n\n"
+                    f"No prior incident perfectly matches this error pattern in the historical records.\n\n"
+                    f"**Hypothesis:**\n"
+                    f"- The failure likely originates from network timeout, token expiration, or concurrency limits.\n"
+                    f"- Review active service logs for HTTP status code 401/429/504.\n"
+                    f"- Verify that circuit-breaker and retry configurations align with HYPERREALM Engineering Guidelines."
+                )
+
+        return {
+            "agent_id": self.name,
+            "response": response,
+            "citations": citations,
+            "is_simulated": is_sim,
+        }
 
     async def _evaluate_technical_proposal(self, prompt: str, user: UserProfile) -> dict[str, Any]:
         """Compare technical proposal against published guidelines and architecture standards."""
-        # Retrieve official architecture and security guidelines
+        settings = get_settings()
         guides, _ = await self.guide_repo.list(skip=0, limit=10, status="published")
         citations = []
         guideline_summaries = []
@@ -167,22 +185,44 @@ class InsightsAgent:
         elif "compliant" in prompt.lower() or "standard" in prompt.lower():
             outcome = "Recommended"
 
-        response = (
-            f"**Technical Proposal Evaluation**\n\n"
-            f"**Outcome:** `{outcome}`\n\n"
-            f"**Evaluation against Published Standards:**\n"
-            f"I reviewed your proposal against company architecture and security guidelines:\n" +
-            "\n".join(guideline_summaries) + "\n\n"
-            f"**Findings & Conditions:**\n"
-            f"- **Security & Auth:** Ensure all authorization follows OAuth 2.0 with short-lived tokens and token rotation.\n"
-            f"- **Resilience & SLA:** Introduce fallback circuit-breakers for downstream integration dependencies.\n"
-            f"- **Telemetry:** Metrics and structured audit logs must emit to OpenTelemetry collectors.\n\n"
-            f"*Disclaimer: This evaluation is an advisory analysis and does not replace final technical lead approval.*"
-        )
+        response = None
+        is_sim = settings.is_demo
+
+        if not settings.is_demo:
+            try:
+                from .adk_runtime import call_gemini_model
+                sys_inst = (
+                    f"You are the Hyperrealm Architecture & Quality Gate Evaluator serving {user.name}. "
+                    "Evaluate technical proposals against published organizational guidelines. Cite standards."
+                )
+                eval_prompt = (
+                    f"Technical Proposal:\n{prompt}\n\n"
+                    f"Authoritative Guidelines:\n" + "\n".join(guideline_summaries) + "\n\n"
+                    f"Evaluate this architecture proposal for security, resilience, zero-trust compliance, and quality gates."
+                )
+                response = await call_gemini_model(prompt=eval_prompt, system_instruction=sys_inst)
+                is_sim = False
+            except Exception as exc:
+                logger.warning("Gemini proposal evaluation failed (%s), using local response", exc)
+
+        if not response:
+            response = (
+                f"**Technical Proposal Evaluation**\n\n"
+                f"**Outcome:** `{outcome}`\n\n"
+                f"**Evaluation against Published Standards:**\n"
+                f"I reviewed your proposal against company architecture and security guidelines:\n" +
+                "\n".join(guideline_summaries) + "\n\n"
+                f"**Findings & Conditions:**\n"
+                f"- **Security & Auth:** Ensure all authorization follows OAuth 2.0 with short-lived tokens and token rotation.\n"
+                f"- **Resilience & SLA:** Introduce fallback circuit-breakers for downstream integration dependencies.\n"
+                f"- **Telemetry:** Metrics and structured audit logs must emit to OpenTelemetry collectors.\n\n"
+                f"*Disclaimer: This evaluation is an advisory analysis and does not replace final technical lead approval.*"
+            )
 
         return {
             "agent_id": self.name,
             "response": response,
             "citations": citations,
             "outcome": outcome,
+            "is_simulated": is_sim,
         }

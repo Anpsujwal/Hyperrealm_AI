@@ -24,6 +24,7 @@ from ..models import (
     UserRole,
 )
 from ..schemas import KnowledgeSearchResult
+from .vertex_search import VertexAISearchService
 
 logger = logging.getLogger("hyperrealm.retrieval")
 
@@ -32,6 +33,9 @@ class EnterpriseRetrievalService:
     """
     Unified enterprise search service enforcing authorization and scope boundaries.
     """
+
+    def __init__(self):
+        self.vertex_search = VertexAISearchService()
 
     @property
     def doc_repo(self):
@@ -142,6 +146,19 @@ class EnterpriseRetrievalService:
                         )
                     )
                     official_matches.append(guide)
+
+            # Query live Vertex AI Search for enterprise store if configured
+            if self.vertex_search.is_configured():
+                vs_res = await self.vertex_search.search(query=query, top_k=top_k)
+                if vs_res.is_live and vs_res.results:
+                    is_admin = getattr(user, "role", "") in ("admin", UserRole.ADMIN, "UserRole.ADMIN")
+                    for vs_item in vs_res.results:
+                        # RBAC: if document is under a user folder, enforce ownership
+                        if vs_item.scope == DocumentScope.PERSONAL and vs_item.author_id != user.id and not is_admin:
+                            continue
+                        # Only include results with actual readable content
+                        if vs_item.snippet and not vs_item.snippet.startswith("[No readable"):
+                            results.append(vs_item)
 
         # ── 3. Project Scope ───────────────────────────────────────────────────
         if DocumentScope.PROJECT in scopes:
@@ -277,3 +294,34 @@ class EnterpriseRetrievalService:
                             f"which conflicts with official policy '{guide.title}'. The official guideline is authoritative."
                         )
         return discrepancies
+    def _detect_discrepancies(
+        self, personal_docs: list[Document], official_guides: list[Guideline]
+    ) -> list[str]:
+        """
+        Identify if any employee notes contradict published company guidelines.
+        Enforces policy precedence: official published guidelines are authoritative.
+        """
+        discrepancies: list[str] = []
+        for p_doc in personal_docs:
+            p_text = (p_doc.content or "").lower()
+            for guide in official_guides:
+                g_text = guide.content.lower()
+                # Check known security/coding policy discrepancies
+                if "jwt" in p_text and "jwt" in g_text:
+                    if ("localstorage" in p_text or "in-memory" in p_text) and "http-only" in g_text:
+                        discrepancies.append(
+                            f"Notice: Personal KT '{p_doc.title}' references client-side token storage, "
+                            f"whereas official guideline '{guide.title}' (v{guide.version}) strictly mandates "
+                            f"HTTP-only cookies. The published official guideline is authoritative."
+                        )
+                if "approval" in p_text and "approval" in g_text:
+                    if "bypass" in p_text or "skip" in p_text:
+                        discrepancies.append(
+                            f"Discrepancy: Personal KT '{p_doc.title}' describes expedited manual steps, "
+                            f"which conflicts with official policy '{guide.title}'. The official guideline is authoritative."
+                        )
+        return discrepancies
+
+
+# Backward-compatible alias
+RetrievalService = EnterpriseRetrievalService

@@ -12,6 +12,7 @@ from ..config import get_settings
 from ..dependencies import get_doc_repo, get_guide_repo
 from ..models import Document, DocumentScope, Guideline, UserProfile, UserRole
 from ..services.retrieval import EnterpriseRetrievalService
+from .adk_runtime import call_gemini_model, GeminiInvocationError
 
 logger = logging.getLogger("hyperrealm.agents.knowledge")
 
@@ -59,6 +60,7 @@ class KnowledgeAgent:
                         "response": "Access denied: you do not have permission to access another employee's private document.",
                         "citations": [],
                         "discrepancies": [],
+                        "is_simulated": False,
                     }
                 return await self._answer_from_document(query, doc, user)
 
@@ -71,30 +73,96 @@ class KnowledgeAgent:
         )
 
         if not results:
+            fallback_text = self._synthesize_general_answer(query, user)
+            is_sim = settings.is_demo
+            if not settings.is_demo:
+                try:
+                    sys_inst = (
+                        f"You are the Hyperrealm Knowledge Assistant for employee {user.name} ({user.role}). "
+                        "Help with general workspace and technical engineering guidance."
+                    )
+                    model_reply = await call_gemini_model(prompt=query, system_instruction=sys_inst)
+                    if model_reply:
+                        fallback_text = model_reply
+                        is_sim = False
+                except Exception as exc:
+                    logger.warning("Gemini general Q&A fallback failed (%s), using local response", exc)
+
             return {
                 "agent_id": self.name,
-                "response": self._synthesize_general_answer(query, user),
+                "response": fallback_text,
                 "citations": [],
                 "discrepancies": discrepancies,
+                "is_simulated": is_sim,
             }
 
-        # Build grounded response
+        # Build grounded response with strict readability and artifact checks
         passages: list[str] = []
         citations: list[dict[str, Any]] = []
+        stream_artifacts = ["/FlateDecode", "/Filter /", "/XObject", "endstream", "/Length "]
 
         for r in results:
+            snip = (r.snippet or "").strip()
+            # Discard any raw binary or stream tokens
+            if any(a in snip for a in stream_artifacts):
+                continue
+            if snip.startswith("[PDF Document:") and "Text could not be extracted" in snip:
+                continue
+            if not snip:
+                continue
+
             scope_label = "Your Personal Hub" if r.scope == DocumentScope.PERSONAL else "Official Guideline"
-            passages.append(f"[{scope_label}: {r.title} (v{r.version})]\n{r.snippet}")
+            passages.append(f"[{scope_label}: {r.title} (v{r.version})]\n{snip}")
             for c in r.citations:
                 citations.append(c)
 
-        answer_text = self._synthesize_grounded_answer(query, results, discrepancies, user)
+        if not passages:
+            return {
+                "agent_id": self.name,
+                "response": f"No usable readable text was found in the indexed documents to answer your inquiry: '{query}'. Please verify that documents have completed text extraction and indexing.",
+                "citations": [],
+                "discrepancies": discrepancies,
+                "is_simulated": settings.is_demo,
+            }
+
+        answer_text = None
+        is_simulated = settings.is_demo
+
+        if not settings.is_demo:
+            try:
+                system_instruction = (
+                    f"You are the Hyperrealm Knowledge Specialist Agent serving employee {user.name} "
+                    f"({user.role.value if hasattr(user.role, 'value') else user.role}). "
+                    "Answer the user query strictly grounded in the provided retrieved enterprise context. "
+                    "Rules:\n"
+                    "1. Authoritative official guidelines take precedence over personal working notes.\n"
+                    "2. If personal notes conflict with official guidelines, explicitly state the discrepancy.\n"
+                    "3. Cite source document titles and versions.\n"
+                    "4. Do not invent facts outside the retrieved passages."
+                )
+                grounded_prompt = (
+                    f"User Inquiry: {query}\n\n"
+                    f"Retrieved Document Passages:\n" + "\n\n".join(passages) + "\n\n"
+                    + (f"Known Policy Discrepancies:\n" + "\n".join(f"- {d}" for d in discrepancies) + "\n\n" if discrepancies else "")
+                    + "Synthesize a professional, grounded response citing relevant official and personal documents."
+                )
+                answer_text = await call_gemini_model(
+                    prompt=grounded_prompt,
+                    system_instruction=system_instruction,
+                )
+                is_simulated = False
+            except Exception as exc:
+                logger.warning("Live Gemini model call failed in KnowledgeAgent (%s), using deterministic synthesis", exc)
+
+        if not answer_text:
+            answer_text = self._synthesize_grounded_answer(query, results, discrepancies, user)
 
         return {
             "agent_id": self.name,
             "response": answer_text,
             "citations": citations,
             "discrepancies": discrepancies,
+            "is_simulated": is_simulated,
         }
 
     async def summarize_document(self, document_id: str, user: UserProfile) -> dict[str, Any]:
@@ -120,23 +188,33 @@ class KnowledgeAgent:
                 "Processed and indexed into personal knowledge scope for Copilot Q&A.",
             ]
 
-        summary = (
-            f"**Executive Summary for {doc.title}** (Scope: {doc.scope.value.title()})\n\n"
-            f"This document covers {doc.category} principles, specifications, and architecture details. "
-            f"Indexed into the HYPERREALM retrieval pipeline with {len(lines)} content blocks."
-        )
-
-        visual_elements_detected = []
-        if doc.visual_summary:
-            visual_elements_detected.append(doc.visual_summary)
-        if any(term in content.lower() for term in ["architecture", "diagram", "flowchart", "wireframe", "chart"]):
-            visual_elements_detected.append("System Architecture Diagram")
-
-        suggested_questions = [
-            f"What are the core guidelines defined in {doc.title}?",
-            f"How is data security handled in this document?",
-            f"Can you summarize the action items from {doc.title}?",
+        visual_elements_detected = [
+            str(img.get("name", f"embedded_image_{idx+1}"))
+            for idx, img in enumerate(doc.images_extracted or [])
         ]
+        summary = (
+            f"Executive summary for '{doc.title}' (category: {doc.category}). "
+            f"Contains {len(lines)} structured content lines and is indexed for enterprise use."
+        )
+        suggested_questions = [
+            f"What are the core requirements and constraints defined in {doc.title}?",
+            f"How does {doc.title} impact existing production systems and architecture?",
+            f"What are the immediate follow-up actions and approvals needed for this document?",
+        ]
+
+        settings = get_settings()
+        if not settings.is_demo and content:
+            try:
+                sys_inst = (
+                    "You are the Hyperrealm Document Intelligence specialist. Generate a concise, structured executive summary "
+                    "of the provided technical/enterprise document. Include key takeaways and relevant follow-up questions."
+                )
+                prompt = f"Document Title: {doc.title}\nCategory: {doc.category}\nContent:\n{content[:4000]}"
+                live_summary = await call_gemini_model(prompt=prompt, system_instruction=sys_inst)
+                if live_summary:
+                    summary = live_summary
+            except Exception as exc:
+                logger.warning("Gemini document summarization failed (%s), using local structured summary", exc)
 
         return {
             "document_id": doc.id,
@@ -154,8 +232,19 @@ class KnowledgeAgent:
 
     async def _answer_from_document(self, query: str, doc: Document, user: UserProfile) -> dict[str, Any]:
         """Grounded Q&A over single specific document."""
-        content = doc.content or doc.extracted_text or ""
-        snippet = content[:500] if len(content) > 500 else content
+        settings = get_settings()
+        content = (doc.content or doc.extracted_text or "").strip()
+
+        # Check for legacy raw PDF stream artifacts and attempt on-the-fly reprocess
+        stream_artifacts = ["/FlateDecode", "/Filter /", "/XObject", "endstream", "/Length "]
+        if any(a in content for a in stream_artifacts):
+            try:
+                from ..services.ingestion import get_ingestion
+                doc = await get_ingestion().reprocess_document(doc)
+                content = (doc.content or doc.extracted_text or "").strip()
+                await self.doc_repo.update(doc.id, doc)
+            except Exception as e:
+                logger.warning("Auto-reprocessing failed for %s: %s", doc.id, e)
 
         citations = [{
             "source_type": "document",
@@ -165,18 +254,47 @@ class KnowledgeAgent:
             "section": "Uploaded Document Content",
         }]
 
-        response = (
-            f"According to your document **{doc.title}** (v{doc.version}):\n\n"
-            f"> \"{snippet}\"\n\n"
-            f"This grounded passage answers your query regarding '{query}'. "
-            f"All information was retrieved directly from your personal knowledge repository."
-        )
+        if not content or (content.startswith("[PDF Document:") and "Text could not be extracted" in content):
+            return {
+                "agent_id": self.name,
+                "response": f"Document '{doc.title}' contains no readable text or is an image/scanned file without an OCR layer. Please upload a readable document or enable OCR.",
+                "citations": citations,
+                "discrepancies": [],
+                "is_simulated": settings.is_demo,
+            }
+
+        snippet = content[:500] if len(content) > 500 else content
+
+        response = None
+        is_sim = settings.is_demo
+
+        if not settings.is_demo and content:
+            try:
+                sys_inst = (
+                    f"You are the Hyperrealm Document Q&A assistant serving {user.name}. "
+                    f"Answer the query strictly based on document '{doc.title}' (v{doc.version}). "
+                    "Cite relevant sections and quote key sentences verbatim where helpful."
+                )
+                prompt = f"User Question: {query}\n\nDocument Context:\n{content[:5000]}"
+                response = await call_gemini_model(prompt=prompt, system_instruction=sys_inst)
+                is_sim = False
+            except Exception as exc:
+                logger.warning("Gemini Q&A from document failed (%s), using local response", exc)
+
+        if not response:
+            response = (
+                f"According to your document **{doc.title}** (v{doc.version}):\n\n"
+                f"> \"{snippet}\"\n\n"
+                f"This grounded passage answers your query regarding '{query}'. "
+                f"All information was retrieved directly from your personal knowledge repository."
+            )
 
         return {
             "agent_id": self.name,
             "response": response,
             "citations": citations,
             "discrepancies": [],
+            "is_simulated": is_sim,
         }
 
     def _synthesize_grounded_answer(

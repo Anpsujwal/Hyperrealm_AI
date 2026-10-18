@@ -5,7 +5,10 @@ deterministic compliance rule engine in demonstration mode.
 """
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
+import re
 from datetime import datetime
 from typing import Any, Optional
 
@@ -82,21 +85,33 @@ class BrandComplianceService:
             )
             return await self.bcr_repo.create(report)
 
-        # In live mode with credentials configured, try Gemini Vision
+        # In live mode with credentials configured, execute real Gemini Vision
         report_data = None
         analysis_mode = "simulated_demo"
 
-        if not settings.is_demo and settings.GOOGLE_CLOUD_PROJECT:
+        if not settings.is_demo and (settings.GOOGLE_CLOUD_PROJECT or settings.GEMINI_API_KEY) and image_bytes:
             try:
-                report_data = await self._run_gemini_vision_audit(image_bytes, image_url, brand_guide)
+                report_data = await self._run_gemini_vision_audit(image_bytes, image_url, brand_guide, image_filename)
                 analysis_mode = "gemini_vision_live"
             except Exception as e:
-                logger.warning("Gemini Vision live invocation failed (%s), falling back to demo rule engine", e)
+                logger.error("Gemini Vision live invocation failed: %s", e)
+                report_data = {
+                    "status": ComplianceStatus.UNABLE_TO_DETERMINE,
+                    "summary": f"Live Gemini Vision analysis could not be completed: {e}",
+                    "checks": [],
+                    "observed_evidence": {"error": str(e)},
+                    "guideline_reference": f"{guideline_title}",
+                    "severity": "none",
+                    "recommendations": ["Verify image format and Vertex AI quota before retrying."],
+                    "limitations": [f"Live AI evaluation error: {e}"],
+                }
+                analysis_mode = "live_invocation_failed"
 
         if not report_data:
             report_data = self._run_deterministic_compliance_audit(
                 image_bytes, image_url, image_filename, brand_guide
             )
+            analysis_mode = "simulated_demo"
 
         report = BrandComplianceReport(
             id=new_id("bcr_"),
@@ -289,31 +304,73 @@ class BrandComplianceService:
         image_bytes: Optional[bytes],
         image_url: Optional[str],
         brand_guide: Optional[Guideline],
+        filename: Optional[str] = None,
     ) -> dict[str, Any]:
         """Call Gemini multimodal vision API via Google GenAI SDK."""
-        from google import genai
-        client = genai.Client()
-        settings = get_settings()
+        from ..agents.adk_runtime import get_live_genai_client
+        from google.genai import types
 
+        client = get_live_genai_client()
+        if not client:
+            raise RuntimeError("Live Gemini client is not initialized.")
+
+        settings = get_settings()
         guide_content = brand_guide.content if brand_guide else "Hyperrealm Brand Identity Guidelines v2.1"
         prompt = (
-            f"You are the Hyperrealm Brand Intelligence auditor. Evaluate the provided image against these published rules:\n"
+            f"You are the Hyperrealm Brand Intelligence auditor. Evaluate the provided image against these authoritative published brand rules:\n"
             f"{guide_content}\n\n"
-            f"Respond with a JSON object containing: status (compliant/non_compliant/partially_compliant/unable_to_determine), "
-            f"summary, checks (list of requirement, observed_evidence, result, supporting_source), "
-            f"observed_evidence (dict), guideline_reference, severity (none/low/medium/high), "
-            f"recommendations (list of strings), limitations (list of strings)."
+            "Analyze the image for: color palette adherence (#6366F1, dark neutrals), logo clear space (>= 24px), "
+            "typography, readability contrast, and confidentiality markings.\n"
+            "Respond ONLY with a valid JSON object with the following schema:\n"
+            "{\n"
+            '  "status": "compliant" | "non_compliant" | "partially_compliant" | "unable_to_determine",\n'
+            '  "summary": "concise executive summary of audit findings",\n'
+            '  "checks": [\n'
+            '    {"requirement": "...", "observed_evidence": "...", "result": "Passed"|"Failed"|"Warning", "supporting_source": "..."}\n'
+            "  ],\n"
+            '  "observed_evidence": {"dimensions": "...", "dominant_colors": ["#..."]},\n'
+            '  "guideline_reference": "Hyperrealm Brand Guidelines v2.1",\n'
+            '  "severity": "none" | "low" | "medium" | "high",\n'
+            '  "recommendations": ["..."],\n'
+            '  "limitations": ["..."]\n'
+            "}"
         )
 
-        response = await client.aio.models.generate_content(
-            model=settings.GEMINI_MODEL,
-            contents=[prompt, image_bytes or image_url],
-        )
+        contents_payload: list[Any] = [prompt]
+        if image_bytes:
+            fn = (filename or "").lower()
+            mime = "image/png"
+            if fn.endswith(".jpg") or fn.endswith(".jpeg"):
+                mime = "image/jpeg"
+            elif fn.endswith(".webp"):
+                mime = "image/webp"
+            part = types.Part.from_bytes(data=image_bytes, mime_type=mime)
+            contents_payload.append(part)
+        elif image_url:
+            contents_payload.append(f"Image URL: {image_url}")
 
-        import json
+        def _sync_call():
+            return client.models.generate_content(
+                model=settings.GEMINI_MODEL,
+                contents=contents_payload,
+                config={"temperature": 0.1},
+            )
+
+        response = await asyncio.to_thread(_sync_call)
         text = response.text or ""
-        # Extract json block if present
+
         match = re.search(r"\{.*\}", text, re.DOTALL)
         if match:
-            return json.loads(match.group(0))
-        raise ValueError("Could not parse JSON response from Gemini Vision")
+            parsed = json.loads(match.group(0))
+            # Normalize status to ComplianceStatus enum value
+            raw_status = str(parsed.get("status", "")).lower().replace(" ", "_")
+            status_map = {
+                "compliant": ComplianceStatus.COMPLIANT,
+                "non_compliant": ComplianceStatus.NON_COMPLIANT,
+                "partially_compliant": ComplianceStatus.PARTIALLY_COMPLIANT,
+                "unable_to_determine": ComplianceStatus.UNABLE_TO_DETERMINE,
+            }
+            parsed["status"] = status_map.get(raw_status, ComplianceStatus.UNABLE_TO_DETERMINE)
+            return parsed
+
+        raise ValueError(f"Could not parse valid JSON from Gemini Vision response: {text[:200]}")
